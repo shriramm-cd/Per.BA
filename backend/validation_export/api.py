@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from typing import Dict, Any, List
 from backend.validation_export.schemas import (
@@ -199,9 +199,221 @@ async def generate_rework_package(
     await AuditService.log_event(job_id, "REWORK_CREATED", {"package_id": package.package_id})
     return package
 
+async def run_rework_pipeline(job_id: str, edits: Dict[str, Any], comments: str):
+    from backend.db.postgres import AsyncSessionLocal
+    from backend.db.models import Job, Story, Requirement
+    from backend.validation_export.db_models import ValidationResultDB, ValidationFindingDB
+    from backend.validation_export.schemas import ValidationFinding, Severity
+    from backend.validation_export.revision_engine import RevisionEngine
+    from backend.agents.agent3_user_story_generator import run as run_agent3
+    from backend.validation_export.agent4_validation_engine import run as run_agent4
+    from sqlalchemy import select, delete
+    
+    from backend.shared.logger import get_logger
+    logger = get_logger(__name__)
+    
+    async with AsyncSessionLocal() as session:
+        try:
+            # 1. Get Job and increment retry_count
+            stmt_job = select(Job).where(Job.id == job_id)
+            res_job = await session.execute(stmt_job)
+            job = res_job.scalar_one_or_none()
+            if not job:
+                logger.error(f"Job {job_id} not found for rework.")
+                return
+                
+            meta = dict(job.meta_info or {})
+            retry_count = meta.get("retry_count", 0) + 1
+            meta["retry_count"] = retry_count
+            job.meta_info = meta
+            
+            if retry_count > 3:
+                logger.warning(f"Job {job_id} reached max retry attempts. Status set to MANUAL_RESOLUTION_REQUIRED.")
+                job.status = "MANUAL_RESOLUTION_REQUIRED"
+                await session.commit()
+                return
+                
+            job.status = "RUNNING"
+            await session.commit()
+            
+            # 2. Get all stories
+            stmt_stories = select(Story).where(Story.job_id == job_id)
+            res_stories = await session.execute(stmt_stories)
+            stories = res_stories.scalars().all()
+            
+            # 3. Get latest validation findings
+            stmt_val = select(ValidationResultDB).where(ValidationResultDB.job_id == job_id).order_by(ValidationResultDB.created_at.desc())
+            res_val = await session.execute(stmt_val)
+            val_result = res_val.scalars().first()
+            
+            findings = []
+            if val_result:
+                stmt_f = select(ValidationFindingDB).where(ValidationFindingDB.validation_result_id == val_result.id)
+                res_f = await session.execute(stmt_f)
+                db_findings = res_f.scalars().all()
+                for f in db_findings:
+                    findings.append(ValidationFinding(
+                        id=f.id,
+                        validator_name=f.validator_name,
+                        title=f.title,
+                        description=f.description,
+                        severity=Severity(f.severity),
+                        field=f.field,
+                        mitigation=f.mitigation
+                    ))
+            
+            # 4. Separate approved and rejected stories
+            rejected_stories = []
+            approved_stories = []
+            ba_comments_dict = {}
+            
+            stories_list = []
+            for s in stories:
+                s_dict = {
+                    "id": s.id,
+                    "epic": s.epic,
+                    "feature": s.feature,
+                    "title": s.title,
+                    "user_story": s.user_story,
+                    "acceptance_criteria": s.acceptance_criteria,
+                    "trace_mappings": s.trace_mappings,
+                    "definition_of_done": s.validation_results.get("definition_of_done", []) if s.validation_results else []
+                }
+                stories_list.append(s_dict)
+                
+                story_id = s.id
+                ba_status = edits.get(story_id, {}).get("status")
+                ba_feedback = edits.get(story_id, {}).get("feedback")
+                if ba_feedback:
+                    ba_comments_dict[story_id] = ba_feedback
+                    
+                has_findings = any((f.field and story_id in f.field) or (f.id and story_id in f.id) for f in findings)
+                
+                if ba_status == "REJECTED" or ba_feedback or has_findings:
+                    rejected_stories.append(s_dict)
+                else:
+                    approved_stories.append(s_dict)
+                    
+            # 5. Generate story revision packages
+            revision_packages = RevisionEngine.generate_story_revision_packages(
+                job_id=job_id,
+                stories=stories_list,
+                findings=findings,
+                ba_comments_dict=ba_comments_dict
+            )
+            
+            # 6. Reconstruct story contexts
+            stmt_reqs = select(Requirement).where(Requirement.job_id == job_id)
+            res_reqs = await session.execute(stmt_reqs)
+            db_reqs = res_reqs.scalars().all()
+            req_map = {r.trace_id: r for r in db_reqs}
+            
+            story_contexts = []
+            for s in stories:
+                req_id = s.trace_mappings[0] if s.trace_mappings else ""
+                req_obj = req_map.get(req_id)
+                
+                ctx = {
+                    "story_id": s.id,
+                    "requirement_id": req_id,
+                    "requirement": {"id": req_id, "text": req_obj.content if req_obj else ""},
+                    "epic": {"id": s.epic, "name": s.epic},
+                    "feature": {"id": s.feature, "name": s.feature},
+                    "actor": s.user_story.split("I want")[0].replace("As a ", "").strip() if "I want" in s.user_story else "User",
+                    "business_rules": s.acceptance_criteria,
+                    "dependencies": [],
+                    "priority": "Medium",
+                    "validation": {},
+                    "traceability": {}
+                }
+                story_contexts.append(ctx)
+                
+            # 7. Run Agent 3 to regenerate only rejected stories
+            agent3_output = await run_agent3({
+                "story_contexts": story_contexts,
+                "revision_packages": [rp.model_dump() for rp in revision_packages],
+                "approved_stories": approved_stories
+            })
+            
+            # 8. Save updated stories to DB
+            await session.execute(delete(Story).where(Story.job_id == job_id))
+            for us in agent3_output.user_stories:
+                story_model = Story(
+                    id=us.id,
+                    job_id=job_id,
+                    epic=us.epic_id,
+                    feature=us.feature_id,
+                    title=us.title,
+                    user_story=us.user_story_text,
+                    acceptance_criteria=[ac.model_dump() for ac in us.acceptance_criteria],
+                    trace_mappings=us.trace_mappings,
+                    validation_results=None,
+                    plain_text_summary=agent3_output.plain_text_summary
+                )
+                session.add(story_model)
+            await session.commit()
+            
+            # 9. Re-run Agent 4 (Validation Engine)
+            state_data = {
+                "job_id": job_id,
+                "retry_count": retry_count,
+                "user_stories": [
+                    {
+                        "id": s.id,
+                        "epic": s.epic_id,
+                        "feature": s.feature_id,
+                        "title": s.title,
+                        "user_story": s.user_story_text,
+                        "acceptance_criteria": [ac.model_dump() for ac in s.acceptance_criteria],
+                        "trace_mappings": s.trace_mappings
+                    }
+                    for s in agent3_output.user_stories
+                ],
+                "requirements": [
+                    {
+                        "id": r.trace_id,
+                        "content": r.content,
+                        "actors": r.actors,
+                        "business_rules": r.business_rules
+                    }
+                    for r in db_reqs
+                ],
+                "epics": meta.get("epics", []),
+                "features": meta.get("features", []),
+                "business_rules": meta.get("business_rules", []),
+                "actors": meta.get("actors", []),
+                "domain_detection": meta.get("domain_detection", None)
+            }
+            
+            validation_output = await run_agent4(state_data)
+            
+            # 10. Update job status to HUMAN_REVIEW so BA can review again
+            stmt_job = select(Job).where(Job.id == job_id)
+            res_job = await session.execute(stmt_job)
+            job = res_job.scalar_one_or_none()
+            if job:
+                job.status = "HUMAN_REVIEW"
+                await session.commit()
+                
+            logger.info(f"Rework pipeline completed successfully for job: {job_id}")
+            
+        except Exception as e:
+            logger.error(f"Rework pipeline failed for job {job_id}: {str(e)}")
+            try:
+                stmt_job = select(Job).where(Job.id == job_id)
+                res_job = await session.execute(stmt_job)
+                job = res_job.scalar_one_or_none()
+                if job:
+                    job.status = "FAILED"
+                    job.error_message = str(e)
+                    await session.commit()
+            except Exception as db_ex:
+                logger.error(f"Failed to set job status to FAILED: {db_ex}")
+
 @router.post("/review", response_model=Dict[str, Any])
 async def submit_ba_review(
     payload: Dict[str, Any],
+    background_tasks: BackgroundTasks,
     user_info: Dict[str, Any] = Depends(SecurityService.authenticate)
 ):
     """
@@ -230,13 +442,31 @@ async def submit_ba_review(
             edits=edits
         )
         session.add(db_review)
+        
+        from backend.db.models import Job
+        from sqlalchemy import select
+        stmt_job = select(Job).where(Job.id == job_id)
+        res_job = await session.execute(stmt_job)
+        job = res_job.scalar_one_or_none()
+        if job:
+            if decision == "APPROVE":
+                job.status = "COMPLETED"
+            elif decision == "REWORK":
+                job.status = "RUNNING"
+            else:
+                job.status = "FAILED"
         await session.commit()
 
     # Log audit event
     event_type = f"BA_{decision.upper()}"
     await AuditService.log_event(job_id, event_type, {"reviewer": reviewer, "comments": comments})
 
+    if decision == "REWORK":
+        background_tasks.add_task(run_rework_pipeline, job_id, edits, comments)
+        return {"status": "success", "next_state": "REWORK", "message": "Rework pipeline started in background."}
+
     return {"status": "success", "next_state": "PUBLISHED" if decision == "APPROVE" else "REWORK" if decision == "REWORK" else "FAILED"}
+
 
 @router.get("/jobs/{job_id}/report", response_model=Dict[str, Any])
 async def get_validation_report(

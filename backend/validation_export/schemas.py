@@ -88,6 +88,16 @@ class RevisionPackage(BaseModel):
     modify_section: ModifySection = Field(..., description="Sections to modify")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
 
+class StoryRevisionPackage(BaseModel):
+    story_id: str = Field(..., description="ID of the story to be reworked")
+    current_story: Dict[str, Any] = Field(..., description="The current user story content")
+    failed_validators: List[str] = Field(default_factory=list, description="Validators that failed for this story")
+    validation_findings: List[Dict[str, Any]] = Field(default_factory=list, description="Validation findings for this story")
+    ba_comments: List[str] = Field(default_factory=list, description="Business Analyst review comments")
+    preserve_section: Dict[str, Any] = Field(default_factory=dict, description="Protected fields that must not be modified")
+    modify_section: Dict[str, Any] = Field(default_factory=dict, description="Fields/issues that require modification")
+
+
 # --- Final Export Contract ---
 
 class ValidatedStoryPackage(BaseModel):

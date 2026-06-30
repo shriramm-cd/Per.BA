@@ -1,0 +1,2 @@
+This is a valid requirement document.
+It has functional requirements and actors.

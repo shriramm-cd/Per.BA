@@ -7,6 +7,16 @@ from backend.shared.logger import get_logger
 
 logger = get_logger(__name__)
 
+def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+    """
+    Safely gets a value from a dict or an object (like a Pydantic model).
+    """
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
 def _calculate_confidence_score(
     total_requirements: int,
     mapped_requirements: int,
@@ -47,53 +57,55 @@ def _calculate_confidence_score(
 
 def _build_requirement_mapping(
     requirements: List[Dict[str, Any]],
-    hierarchy: List[Dict[str, Any]],
-    epics: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+    hierarchy: List[Any],
+    epics: List[Any]
+) -> List[Any]:
     """
     Build detailed requirement mappings with full context.
     """
+    from backend.agents.schemas import RequirementMapping
     mappings = []
     for mapping in hierarchy:
-        req_id = mapping.get("requirement_id")
-        feat_id = mapping.get("feature_id")
+        req_id = _get_val(mapping, "requirement_id")
+        feat_id = _get_val(mapping, "feature_id")
         
         # Find requirement content
         req_content = ""
         for req in requirements:
-            if req.get("id") == req_id:
-                req_content = req.get("content", "")
+            if _get_val(req, "id") == req_id:
+                req_content = _get_val(req, "content", "")
                 break
         
         # Find epic for this feature
         epic_id = ""
         for epic in epics:
-            if epic.get("id") == feat_id:
-                epic_id = epic.get("epic_id", "")
+            if _get_val(epic, "id") == feat_id:
+                epic_id = _get_val(epic, "epic_id", "")
                 break
         
-        mappings.append({
-            "requirement_id": req_id,
-            "requirement_content": req_content,
-            "epic_id": epic_id,
-            "feature_id": feat_id
-        })
+        mappings.append(RequirementMapping(
+            requirement_id=req_id or "",
+            requirement_content=req_content or "",
+            epic_id=epic_id or "",
+            feature_id=feat_id or ""
+        ))
     
     return mappings
 
 def _build_epic_hierarchy(
-    epics: List[Dict[str, Any]],
-    features: List[Dict[str, Any]],
-    hierarchy: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+    epics: List[Any],
+    features: List[Any],
+    hierarchy: List[Any]
+) -> List[Any]:
     """
     Build epic-level hierarchy showing feature and requirement groupings.
     """
+    from backend.agents.schemas import EpicHierarchy
     epic_map = {}
     
     # Initialize epic entries
     for epic in epics:
-        epic_id = epic.get("id")
+        epic_id = _get_val(epic, "id")
         epic_map[epic_id] = {
             "epic_id": epic_id,
             "feature_ids": [],
@@ -102,25 +114,32 @@ def _build_epic_hierarchy(
     
     # Map features and requirements to epics
     for feature in features:
-        epic_id = feature.get("epic_id")
-        feat_id = feature.get("id")
+        epic_id = _get_val(feature, "epic_id")
+        feat_id = _get_val(feature, "id")
         if epic_id in epic_map:
             epic_map[epic_id]["feature_ids"].append(feat_id)
     
     # Map requirements through hierarchy
     for mapping in hierarchy:
-        feat_id = mapping.get("feature_id")
-        req_id = mapping.get("requirement_id")
+        feat_id = _get_val(mapping, "feature_id")
+        req_id = _get_val(mapping, "requirement_id")
         
         # Find which epic this feature belongs to
         for feature in features:
-            if feature.get("id") == feat_id:
-                epic_id = feature.get("epic_id")
+            if _get_val(feature, "id") == feat_id:
+                epic_id = _get_val(feature, "epic_id")
                 if epic_id in epic_map:
                     epic_map[epic_id]["requirement_ids"].append(req_id)
                 break
     
-    return list(epic_map.values())
+    return [
+        EpicHierarchy(
+            epic_id=val["epic_id"],
+            feature_ids=val["feature_ids"],
+            requirement_ids=val["requirement_ids"]
+        )
+        for val in epic_map.values()
+    ]
 
 def _extract_domain_context(requirements: List[Dict[str, Any]]) -> str:
     """
@@ -227,15 +246,41 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
     system_prompt = """You are an expert Enterprise Agile Architect. 
     Organize requirements into a structured Epic & Feature hierarchy with complete traceability.
     Include dependency mapping, priority classification, and confidence assessment.
-    Output ONLY valid JSON matching the specified schema.
-    Do not include any text outside the JSON."""
+    You MUST output a valid JSON object matching the EpicFeaturePlannerOutput schema exactly.
+    Ensure that all required fields ('epics', 'features', 'hierarchy') are present in the JSON root.
+    Output ONLY the raw JSON object. Do not include any markdown formatting, code fences, or explanations."""
 
     # 2. Invoke LLM client
     llm = LLMClient()
     response_json = await llm.generate_json(prompt=prompt, system_prompt=system_prompt)
     
     # 3. Cast to Pydantic structure
-    output = EpicFeaturePlannerOutput.model_validate(response_json)
+    # Inject placeholders for required fields so initial Pydantic validation passes
+    if "coverage_report" not in response_json:
+        response_json["coverage_report"] = {
+            "total_requirements": 0,
+            "mapped_requirements": 0,
+            "unmapped_requirements": 0,
+            "coverage_percentage": 0.0
+        }
+    if "metadata" not in response_json:
+        response_json["metadata"] = {
+            "generated_by": "Agent-2",
+            "generated_timestamp": datetime.utcnow().isoformat() + "Z",
+            "domain": "",
+            "version": "1.0",
+            "model_name": "",
+            "confidence_score": 0.0
+        }
+        
+    try:
+        output = EpicFeaturePlannerOutput.model_validate(response_json)
+    except Exception as ve:
+        logger.error(f"Agent 2 Pydantic schema validation failed. Error: {str(ve)}")
+        logger.error(f"Response JSON causing validation failure:\n{json.dumps(response_json, indent=2)}")
+        raise ve
+
+
     
     # 4. Post-processing and enrichment
     total_requirements = len(serializable_requirements)
@@ -297,19 +342,26 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
         traceability = []
         for req_map in output.requirement_mapping:
             trace_entry = {
-                "requirement_id": req_map.get("requirement_id"),
-                "epic_id": req_map.get("epic_id"),
-                "feature_id": req_map.get("feature_id"),
+                "requirement_id": _get_val(req_map, "requirement_id"),
+                "epic_id": _get_val(req_map, "epic_id"),
+                "feature_id": _get_val(req_map, "feature_id"),
                 "dependencies": []
             }
             
             # Find dependencies for this feature
-            feat_id = req_map.get("feature_id")
+            feat_id = _get_val(req_map, "feature_id")
             for dep in output.dependencies:
-                if dep.get("dependent_feature_id") == feat_id:
-                    trace_entry["dependencies"].append(dep.get("dependency_feature_id"))
+                if _get_val(dep, "dependent_feature_id") == feat_id:
+                    trace_entry["dependencies"].append(_get_val(dep, "dependency_feature_id"))
             
-            traceability.append(trace_entry)
+            # Map to TraceabilityMatrix Pydantic object
+            from backend.agents.schemas import TraceabilityMatrix
+            traceability.append(TraceabilityMatrix(
+                requirement_id=trace_entry["requirement_id"],
+                epic_id=trace_entry["epic_id"],
+                feature_id=trace_entry["feature_id"],
+                dependencies=trace_entry["dependencies"]
+            ))
         
         output.traceability_matrix = traceability
     

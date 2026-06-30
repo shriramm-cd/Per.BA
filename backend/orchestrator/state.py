@@ -14,6 +14,7 @@ class PipelineState(BaseModel):
 
     # Requirement Package (pre-Agent-1)
     requirement_package: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    input_summary: Optional[Dict[str, Any]] = Field(default=None, description="Concise BRD summary generated after ingestion")
 
     # Agent 1 outputs
     agent1_output: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -58,6 +59,8 @@ class GraphState(TypedDict):
     fingerprint: str
 
     requirement_package: Dict[str, Any]
+    input_summary: Optional[Dict[str, Any]]
+
 
     agent1_output: Dict[str, Any]
     requirements: List[Dict[str, Any]]

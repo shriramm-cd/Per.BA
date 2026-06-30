@@ -515,11 +515,39 @@ Date: June 30, 2026</textarea>
             </div>
         </div>
 
+        <!-- Input Summary Card -->
+        <div id="inputSummaryCard" style="display: none; margin-top: 24px; padding: 20px; background: rgba(31, 41, 55, 0.4); border: 1px solid var(--border-color); border-radius: 12px;">
+            <h4 style="margin-top: 0; color: #a5b4fc; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">📋 Ingested BRD Summary</h4>
+            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem;">
+                <div><strong>Business Objective:</strong> <span id="summary-objective"></span></div>
+                <div><strong>Detected Domain:</strong> <span id="summary-domain" class="badge badge-epic" style="font-size: 0.8rem; padding: 3px 8px; display: inline-block;"></span></div>
+                <div><strong>Primary Actors:</strong> <span id="summary-actors"></span></div>
+                <div><strong>Systems Mentioned:</strong> <span id="summary-systems"></span></div>
+                <div><strong>Narrative Summary:</strong> <p id="summary-narrative" style="margin: 4px 0 0 0; color: #d1d5db; line-height: 1.5;"></p></div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px;">
+                    <div>
+                        <strong style="color: #a7f3d0;">Functional Requirements:</strong>
+                        <ul id="summary-functional" style="margin: 4px 0 0 0; padding-left: 20px; color: #d1d5db;"></ul>
+                    </div>
+                    <div>
+                        <strong style="color: #fde047;">Non-Functional Requirements:</strong>
+                        <ul id="summary-nonfunctional" style="margin: 4px 0 0 0; padding-left: 20px; color: #d1d5db;"></ul>
+                    </div>
+                </div>
+                <div>
+                    <strong style="color: #f59e0b;">Business Rules:</strong>
+                    <ul id="summary-rules" style="margin: 4px 0 0 0; padding-left: 20px; color: #d1d5db;"></ul>
+                </div>
+            </div>
+        </div>
+
         <h4 style="margin: 24px 0 10px 0;">Agent Live Console Logs</h4>
         <div id="consoleLogs" class="log-window">
             <p class="log-entry log-info">System idle. Press "Generate" to initiate pipeline...</p>
         </div>
     </div>
+
 
     <!-- Generated Stories Output -->
     <div id="resultsContainer" style="display: none;">
@@ -831,6 +859,32 @@ Date: June 30, 2026</textarea>
                 const nodes = debugState.nodes || [];
                 
                 for (const node of nodes) {
+                    if (node.node === 'ingest' && node.status === 'COMPLETED' && lastNode !== 'ingest-completed') {
+                        updateStep('ingest', 'completed', 'Completed');
+                        
+                        // Extract and display input summary
+                        const summary = node.output.input_summary;
+                        if (summary) {
+                            document.getElementById('summary-objective').innerText = summary.business_objective || 'N/A';
+                            document.getElementById('summary-domain').innerText = summary.detected_domain || 'N/A';
+                            document.getElementById('summary-actors').innerText = (summary.actors || []).join(', ') || 'None';
+                            document.getElementById('summary-systems').innerText = (summary.systems || []).join(', ') || 'None';
+                            document.getElementById('summary-narrative').innerText = summary.summary || '';
+                            
+                            const funcList = document.getElementById('summary-functional');
+                            funcList.innerHTML = (summary.functional_requirements || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+                            
+                            const nonFuncList = document.getElementById('summary-nonfunctional');
+                            nonFuncList.innerHTML = (summary.non_functional_requirements || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+                            
+                            const rulesList = document.getElementById('summary-rules');
+                            rulesList.innerHTML = (summary.business_rules || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+                            
+                            document.getElementById('inputSummaryCard').style.display = 'block';
+                            addLog('Ingested BRD Summary generated and displayed.', 'success');
+                        }
+                        lastNode = 'ingest-completed';
+                    }
                     if (node.node === 'agent1' && node.status === 'STARTED' && lastNode !== 'agent1-started') {
                         addLog('Agent 1 (Requirement Intelligence) has started parsing...', 'info');
                         updateStep('agent1', 'active', 'Parsing BRD...');
@@ -841,6 +895,7 @@ Date: June 30, 2026</textarea>
                         updateStep('agent1', 'completed', 'Success');
                         updateStep('agent2', 'active', 'Planning...');
                         lastNode = 'agent1-completed';
+
                         
                         // Extract and display domain
                         const domDetect = node.output.domain_detection || (node.output.agent1_output && node.output.agent1_output.domain_detection);

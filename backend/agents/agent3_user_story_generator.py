@@ -120,13 +120,165 @@ class UserStoryGenerator:
             metadata=metadata,
         )
 
+    def _build_rework_prompt(self, story_context: StoryContext, revision_package: Any) -> str:
+        import json
+        current_story = revision_package.get("current_story", {})
+        preserve = revision_package.get("preserve_section", {})
+        modify = revision_package.get("modify_section", {})
+        ba_comments = revision_package.get("ba_comments", [])
+        findings = revision_package.get("validation_findings", [])
+        
+        prompt = f"""
+        You are reworking an existing Agile user story because it failed validation or was rejected by a Business Analyst.
+        
+        CURRENT USER STORY:
+        Story ID: {revision_package.get("story_id")}
+        Title: {current_story.get("title")}
+        Story Text: {current_story.get("user_story")}
+        Acceptance Criteria:
+        {json.dumps(current_story.get("acceptance_criteria"), indent=2)}
+        
+        REVISION OBJECTIVES:
+        1. PRESERVE the following sections exactly as they are. Do NOT modify them under any circumstances:
+           - Story Title: {preserve.get("story_title")}
+           - Actor: {preserve.get("actor")}
+           - Approved Business Rules: {json.dumps(preserve.get("approved_business_rules"))}
+           - Traceability Links: {json.dumps(preserve.get("traceability_links"))}
+           - Approved Acceptance Criteria: {json.dumps(preserve.get("approved_acceptance_criteria"))}
+           
+        2. MODIFY or ADD the following based on feedback and validation failures:
+           - Missing Requirements: {json.dumps(modify.get("missing_requirements"))}
+           - Failed Acceptance Criteria: {json.dumps(modify.get("failed_acceptance_criteria"))}
+           - Validator Findings: {json.dumps(modify.get("validator_findings"))}
+           - BA Feedback: {json.dumps(modify.get("ba_feedback"))}
+           - Missing Business Rules: {json.dumps(modify.get("missing_business_rules"))}
+           - Wording Issues: {json.dumps(modify.get("wording_issues"))}
+           
+        BA Comments: {", ".join(ba_comments) if ba_comments else "None"}
+        Failed Validations: {", ".join([f.get("description", "") for f in findings]) if findings else "None"}
+        
+        You must output a valid JSON object matching this exact structure:
+        {{
+          "story_id": "{revision_package.get("story_id")}",
+          "epic": "{current_story.get("epic", "")}",
+          "feature": "{current_story.get("feature", "")}",
+          "user_story": {{
+            "actor": "{preserve.get("actor")}",
+            "goal": "reworked goal based on feedback",
+            "benefit": "reworked benefit based on feedback"
+          }},
+          "acceptance_criteria": [
+             // Include both the approved acceptance criteria and the reworked/new acceptance criteria
+          ],
+          "definition_of_done": {json.dumps(current_story.get("definition_of_done", []))},
+          "summary": "{preserve.get("story_title")}",
+          "priority": "{current_story.get("priority", "Medium")}",
+          "version": {int(current_story.get("version", 1)) + 1},
+          "traceability": {{
+            "requirement_id": "{story_context.requirement_id}",
+            "epic_id": "{self._safe_id(story_context.epic, "id")}",
+            "feature_id": "{self._safe_id(story_context.feature, "id")}"
+          }}
+        }}
+        """
+        return prompt
+
     async def generate(self, orchestrated_payload: dict[str, Any]) -> list[GeneratedUserStory]:
         """Generates user stories for every provided story context."""
         story_contexts = self.validate_input(orchestrated_payload)
+        revision_packages = orchestrated_payload.get("revision_packages", [])
+        approved_stories = orchestrated_payload.get("approved_stories", [])
+        
+        # Map revision packages by story_id
+        rev_map = {}
+        for rp in revision_packages:
+            story_id = rp.get("story_id")
+            if story_id:
+                rev_map[story_id] = rp
+                
+        # Map approved stories by story_id
+        approved_map = {}
+        for s in approved_stories:
+            story_id = s.get("id")
+            if story_id:
+                approved_map[story_id] = s
+                
         generated: list[GeneratedUserStory] = []
         for story_context in story_contexts:
-            generated_story = await self.generate_story(story_context)
-            generated.append(generated_story)
+            story_id = story_context.story_id
+            
+            if story_id in rev_map:
+                rp = rev_map[story_id]
+                self.logger.info(f"Regenerating rejected story {story_id} using revision package.")
+                
+                prompt = self._build_rework_prompt(story_context, rp)
+                system_prompt = (
+                    "You are a senior Business Analyst and Product Owner. "
+                    "Rework the existing Agile user story based on the provided revision objectives, preserving the required sections."
+                )
+                response_json = await self.llm_client.generate_json(prompt=prompt, system_prompt=system_prompt)
+                
+                generated_story = self.parse_response(response_json, story_context)
+                generated_story.story_id = story_id
+                generated_story.version = int(rp.get("current_story", {}).get("version", 1)) + 1
+                generated.append(generated_story)
+                
+            elif story_id in approved_map:
+                self.logger.info(f"Preserving approved story {story_id} as-is.")
+                s = approved_map[story_id]
+                
+                from backend.agents.schemas import Traceability, UserStoryContent, Metadata
+                
+                story_text = s.get("user_story", "")
+                goal = ""
+                benefit = ""
+                if "I want" in story_text and "so that" in story_text:
+                    try:
+                        goal = story_text.split("so that")[0].split("I want")[1].strip()
+                        benefit = story_text.split("so that")[1].strip()
+                    except Exception:
+                        pass
+                        
+                ac_list = []
+                for ac in s.get("acceptance_criteria", []):
+                    if isinstance(ac, dict):
+                        ac_list.append(ac.get("statement", ""))
+                    else:
+                        ac_list.append(str(ac))
+                        
+                gen_story = GeneratedUserStory(
+                    story_id=story_id,
+                    traceability=Traceability(
+                        requirement_id=story_context.requirement_id,
+                        epic_id=self._safe_id(story_context.epic, "id"),
+                        feature_id=self._safe_id(story_context.feature, "id")
+                    ),
+                    epic=s.get("epic", ""),
+                    feature=s.get("feature", ""),
+                    user_story=UserStoryContent(
+                        actor=s.get("actor") or "User",
+                        goal=goal,
+                        benefit=benefit
+                    ),
+                    acceptance_criteria=ac_list,
+                    definition_of_done=s.get("definition_of_done") or [],
+                    summary=s.get("title", ""),
+                    priority=s.get("priority", "Medium"),
+                    version=int(s.get("version", 1)),
+                    metadata=Metadata(
+                        generated_by="Agent-3-Preserved",
+                        generated_timestamp=datetime.now(timezone.utc).isoformat(),
+                        domain=s.get("epic", ""),
+                        version="1.0",
+                        confidence_score=1.0,
+                        source_story_count=1
+                    )
+                )
+                generated.append(gen_story)
+            else:
+                generated_story = await self.generate_story(story_context)
+                generated.append(generated_story)
+                
         return generated
 
     def _normalize_value(self, value: Any, key: str) -> str:
@@ -149,7 +301,11 @@ class UserStoryGenerator:
 async def run(input_data: dict[str, Any], config: Optional[dict[str, Any]] = None) -> UserStoryGeneratorOutput:
     """Compatibility wrapper used by the orchestrator and API layers."""
     generator = UserStoryGenerator()
-    generated_stories = await generator.generate({"story_contexts": input_data.get("story_contexts", [])})
+    generated_stories = await generator.generate({
+        "story_contexts": input_data.get("story_contexts", []),
+        "revision_packages": input_data.get("revision_packages", []),
+        "approved_stories": input_data.get("approved_stories", [])
+    })
 
     legacy_stories: list[UserStory] = []
     for story in generated_stories:
@@ -172,10 +328,10 @@ async def run(input_data: dict[str, Any], config: Optional[dict[str, Any]] = Non
             )
         )
 
-
     response = Response(stories=generated_stories, summary="Generated grounded stories from story contexts.")
     generator.logger.info("Agent 3 completed generation for %s story contexts.", len(generated_stories))
     return UserStoryGeneratorOutput(
         user_stories=legacy_stories,
         plain_text_summary=response.summary,
     )
+

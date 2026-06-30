@@ -114,3 +114,115 @@ class RevisionEngine:
                 logger.error(f"Failed to persist revision package {package.package_id}: {str(e)}")
 
         return package
+
+    @staticmethod
+    def generate_story_revision_packages(
+        job_id: str,
+        stories: List[Dict[str, Any]],
+        findings: List[ValidationFinding],
+        ba_comments_dict: Dict[str, str]
+    ) -> List[Any]:
+        """
+        Generates a list of per-story revision packages for stories requiring rework.
+        """
+        from backend.validation_export.schemas import StoryRevisionPackage, Severity
+        
+        packages = []
+        for story in stories:
+            story_id = story.get("id")
+            if not story_id:
+                continue
+                
+            # Filter findings for this story
+            story_findings = [
+                f for f in findings 
+                if (f.field and story_id in f.field) or (f.id and story_id in f.id)
+            ]
+            
+            ba_comment = ba_comments_dict.get(story_id, "")
+            
+            # A story needs rework if it has findings or BA feedback/rejection
+            if not story_findings and not ba_comment:
+                continue
+                
+            failed_validators = list({f.validator_name for f in story_findings})
+            
+            # Identify failed ACs
+            failed_ac = [
+                f.description for f in story_findings 
+                if "acceptance_criteria" in str(f.field) or "AC-" in f.id
+            ]
+            
+            # Extract actor from story text
+            story_text = story.get("user_story", "")
+            actor = "User"
+            lower_text = story_text.lower()
+            if "i want" in lower_text:
+                prefix = ""
+                if "as a " in lower_text:
+                    prefix = "as a "
+                elif "as an " in lower_text:
+                    prefix = "as an "
+                
+                if prefix:
+                    try:
+                        idx = lower_text.find(prefix)
+                        end_idx = lower_text.find("i want")
+                        actor = story_text[idx + len(prefix):end_idx].strip().rstrip(",")
+                    except Exception:
+                        pass
+            elif story.get("actor"):
+                actor = story.get("actor")
+
+
+            # Structure Preserve Section
+            preserve = {
+                "story_title": story.get("title", ""),
+                "actor": actor,
+                "approved_business_rules": story.get("business_rules", []),
+                "traceability_links": story.get("trace_mappings", []),
+                "approved_acceptance_criteria": [
+                    ac.get("statement") if isinstance(ac, dict) else str(ac)
+                    for ac in story.get("acceptance_criteria", [])
+                    if (ac.get("statement") if isinstance(ac, dict) else str(ac)) not in failed_ac
+                ]
+            }
+            
+            # Structure Modify Section
+            modify = {
+                "missing_requirements": [f.description for f in story_findings if "COV-" in f.id],
+                "failed_acceptance_criteria": failed_ac,
+                "validator_findings": [f.description for f in story_findings],
+                "ba_feedback": [ba_comment] if ba_comment else [],
+                "missing_business_rules": [f.description for f in story_findings if "BR-" in f.id],
+                "wording_issues": [
+                    f.description for f in story_findings 
+                    if f.severity == Severity.MINOR and "wording" in f.description.lower()
+                ]
+            }
+            
+            packages.append(
+                StoryRevisionPackage(
+                    story_id=story_id,
+                    current_story=story,
+                    failed_validators=failed_validators,
+                    validation_findings=[
+                        {
+                            "id": f.id,
+                            "validator_name": f.validator_name,
+                            "title": f.title,
+                            "description": f.description,
+                            "severity": f.severity.value,
+                            "field": f.field,
+                            "mitigation": f.mitigation
+                        }
+                        for f in story_findings
+                    ],
+                    ba_comments=[ba_comment] if ba_comment else [],
+                    preserve_section=preserve,
+                    modify_section=modify
+                )
+            )
+            
+        return packages
+

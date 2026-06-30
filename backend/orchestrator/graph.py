@@ -11,6 +11,17 @@ from backend.orchestrator.retry_handler import RetryHandler
 
 logger = get_logger(__name__)
 
+def _to_dict(val: Any) -> Any:
+    if val is None:
+        return None
+    if isinstance(val, list):
+        return [_to_dict(item) for item in val]
+    if isinstance(val, dict):
+        return {k: _to_dict(v) for k, v in val.items()}
+    if hasattr(val, "model_dump"):
+        return val.model_dump()
+    return val
+
 pipeline_debug_state: Dict[str, Dict[str, Any]] = {}
 
 
@@ -76,7 +87,29 @@ def debug_node(node_name: str):
 
 @debug_node("ingest")
 async def ingest_node(state: GraphState) -> Dict[str, Any]:
-    return {"status": "RUNNING"}
+    from backend.ingestion.summary_generator import InputSummaryGenerator
+    summary_gen = InputSummaryGenerator()
+    summary = await summary_gen.generate_summary(state.get("raw_text", ""))
+    
+    # Save input_summary to the Job's meta_info in the DB
+    from backend.db.postgres import AsyncSessionLocal
+    from backend.db.models import Job
+    from sqlalchemy import select
+    async with AsyncSessionLocal() as session:
+        try:
+            stmt_job = select(Job).where(Job.id == state["job_id"])
+            res_job = await session.execute(stmt_job)
+            job = res_job.scalar_one_or_none()
+            if job:
+                meta = dict(job.meta_info or {})
+                meta["input_summary"] = summary
+                job.meta_info = meta
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to save input_summary to Job meta_info: {e}")
+            
+    return {"status": "RUNNING", "input_summary": summary}
+
 
 
 @debug_node("requirement_repository")
@@ -125,7 +158,7 @@ async def agent1_node(state: GraphState) -> Dict[str, Any]:
     actors = [a.name for a in output.primary_input.actors]
     business_rules = [br.rule for br in output.primary_input.business_rules]
     
-    domain_detection = output.domain_detection.model_dump() if output.domain_detection else None
+    domain_detection = _to_dict(output.domain_detection) if output.domain_detection else None
     
     # Save requirements to database
     from backend.db.postgres import AsyncSessionLocal
@@ -163,14 +196,14 @@ async def agent1_node(state: GraphState) -> Dict[str, Any]:
             logger.error(f"Failed to save requirements to DB: {e}")
             
     return {
-        "agent1_output": output.model_dump(),
+        "agent1_output": _to_dict(output),
         "requirements": requirements,
         "actors": actors,
         "business_rules": business_rules,
         "domain": output.validation_context.domain,
         "domain_detection": domain_detection,
-        "ambiguities": [a.model_dump() for a in output.validation_context.ambiguities],
-        "conflicts": [c.model_dump() for c in output.validation_context.conflicts],
+        "ambiguities": _to_dict(output.validation_context.ambiguities),
+        "conflicts": _to_dict(output.validation_context.conflicts),
         "confidence_score": output.validation_context.confidence_score / 100.0
     }
 
@@ -183,17 +216,17 @@ async def agent2_node(state: GraphState) -> Dict[str, Any]:
     output = await run_agent2(state)
     
     return {
-        "agent2_output": output.model_dump(),
-        "epics": [e.model_dump() for e in output.epics],
-        "features": [f.model_dump() for f in output.features],
-        "hierarchy": [h.model_dump() for h in output.hierarchy],
-        "requirement_mapping": [rm.model_dump() for rm in output.requirement_mapping],
-        "epic_hierarchy": [eh.model_dump() for eh in output.epic_hierarchy],
-        "dependencies": [d.model_dump() for d in output.dependencies],
-        "priority": [p.model_dump() for p in output.priority],
-        "coverage_report": output.coverage_report.model_dump(),
-        "metadata": output.metadata.model_dump(),
-        "traceability_matrix": [tm.model_dump() for tm in output.traceability_matrix]
+        "agent2_output": _to_dict(output),
+        "epics": _to_dict(output.epics),
+        "features": _to_dict(output.features),
+        "hierarchy": _to_dict(output.hierarchy),
+        "requirement_mapping": _to_dict(output.requirement_mapping),
+        "epic_hierarchy": _to_dict(output.epic_hierarchy),
+        "dependencies": _to_dict(output.dependencies),
+        "priority": _to_dict(output.priority),
+        "coverage_report": _to_dict(output.coverage_report),
+        "metadata": _to_dict(output.metadata),
+        "traceability_matrix": _to_dict(output.traceability_matrix)
     }
 
 
@@ -285,7 +318,7 @@ async def agent3_node(state: GraphState) -> Dict[str, Any]:
                     feature=feature_name or us.feature_id,
                     title=us.title,
                     user_story=us.user_story_text,
-                    acceptance_criteria=[ac.model_dump() for ac in us.acceptance_criteria],
+                    acceptance_criteria=_to_dict(us.acceptance_criteria),
                     trace_mappings=us.trace_mappings,
                     validation_results=None,
                     plain_text_summary=output.plain_text_summary
@@ -296,7 +329,7 @@ async def agent3_node(state: GraphState) -> Dict[str, Any]:
             logger.error(f"Failed to save stories to DB: {e}")
             
     return {
-        "user_stories": [us.model_dump() for us in output.user_stories],
+        "user_stories": _to_dict(output.user_stories),
         "plain_text_summary": output.plain_text_summary,
         "story_contexts": story_contexts
     }
@@ -318,14 +351,14 @@ async def agent4_node(state: GraphState) -> Dict[str, Any]:
             job = res_job.scalar_one_or_none()
             if job:
                 meta = dict(job.meta_info or {})
-                meta["validation_results"] = output.model_dump()
+                meta["validation_results"] = _to_dict(output)
                 job.meta_info = meta
                 await session.commit()
         except Exception as e:
             logger.error(f"Failed to save validation_results to Job meta_info: {e}")
             
     return {
-        "validation_results": output.model_dump(),
+        "validation_results": _to_dict(output),
         "quality_score": output.quality_score,
         "is_approved": output.is_approved
     }

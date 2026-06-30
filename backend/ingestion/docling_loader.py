@@ -120,6 +120,98 @@ def _extract_text_from_xlsx(path: Path) -> str:
             text_parts.append("\n".join(sheet_parts))
     return "\n\n".join(text_parts)
 
+async def _extract_text_from_audio(path: Path) -> str:
+    from backend.config import settings
+    if settings.GROQ_API_KEY:
+        try:
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            with open(path, "rb") as audio_file:
+                transcription = await client.audio.transcriptions.create(
+                    file=(path.name, audio_file.read()),
+                    model="whisper-large-v3",
+                    response_format="text",
+                )
+            return transcription
+        except Exception as e:
+            logger.error(f"Groq Whisper transcription failed: {e}")
+    return f"[Mock Audio Transcription] Requirements extracted from audio file: {path.name}."
+
+async def _extract_text_from_image(path: Path) -> str:
+    from backend.config import settings
+    import base64
+    if settings.GROQ_API_KEY:
+        try:
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            with open(path, "rb") as image_file:
+                encoded = base64.b64encode(image_file.read()).decode("utf-8")
+            
+            response = await client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Perform OCR on this image. Extract and return ALL text found in this requirement document or screenshot exactly as written. Do not add any introduction, explanations, or markdown code fences."},
+                            {
+                                  "type": "image_url",
+                                  "image_url": {
+                                      "url": f"data:image/jpeg;base64,{encoded}"
+                                  }
+                              }
+                        ]
+                    }
+                ],
+                temperature=0.0
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Groq Vision OCR failed: {e}")
+    return f"[Mock OCR Extraction] Requirements extracted from image: {path.name}."
+
+def _extract_text_from_email(path: Path) -> str:
+    import email
+    from email.policy import default
+    with open(path, "rb") as f:
+        msg = email.message_from_bytes(f.read(), policy=default)
+    
+    subject = msg.get('subject', '')
+    from_addr = msg.get('from', '')
+    to_addr = msg.get('to', '')
+    
+    body = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            content_disposition = str(part.get_content_disposition())
+            if content_type == "text/plain" and "attachment" not in content_disposition:
+                body = part.get_payload(decode=True).decode(part.get_content_charset() or 'utf-8', errors='replace')
+                break
+    else:
+        body = msg.get_payload(decode=True).decode(msg.get_content_charset() or 'utf-8', errors='replace')
+        
+    headers = []
+    if subject:
+        headers.append(f"Subject: {subject}")
+    if from_addr:
+        headers.append(f"From: {from_addr}")
+    if to_addr:
+        headers.append(f"To: {to_addr}")
+        
+    return "\n".join(headers) + "\n\n" + body
+
+
+def _extract_text_from_csv(path: Path) -> str:
+    import csv
+    rows = []
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row:
+                rows.append(" | ".join(row))
+    return "\n".join(rows)
+
 async def load_from_file(file_path: str) -> dict[str, Any]:
     """
     Load and extract text from a local file using Docling or custom fallbacks.
@@ -142,7 +234,8 @@ async def load_from_file(file_path: str) -> dict[str, Any]:
 
     # ── Custom Extractor Routing ──────────────────────────────────────────────
     suffix = path.suffix.lower()
-    if not _DOCLING_AVAILABLE or suffix in [".pdf", ".docx", ".xlsx", ".txt"]:
+    supported_extensions = [".pdf", ".docx", ".xlsx", ".txt", ".wav", ".mp3", ".m4a", ".png", ".jpg", ".jpeg", ".eml", ".csv"]
+    if not _DOCLING_AVAILABLE or suffix in supported_extensions:
         try:
             if suffix == ".txt":
                 text = path.read_text(encoding="utf-8", errors="replace")
@@ -156,6 +249,18 @@ async def load_from_file(file_path: str) -> dict[str, Any]:
             elif suffix == ".xlsx":
                 text = await asyncio.to_thread(_extract_text_from_xlsx, path)
                 method = "openpyxl"
+            elif suffix in [".wav", ".mp3", ".m4a"]:
+                text = await _extract_text_from_audio(path)
+                method = "whisper_audio"
+            elif suffix in [".png", ".jpg", ".jpeg"]:
+                text = await _extract_text_from_image(path)
+                method = "vision_ocr"
+            elif suffix == ".eml":
+                text = await asyncio.to_thread(_extract_text_from_email, path)
+                method = "email_parser"
+            elif suffix == ".csv":
+                text = await asyncio.to_thread(_extract_text_from_csv, path)
+                method = "csv_parser"
             else:
                 text = path.read_text(encoding="utf-8", errors="replace")
                 method = "text_fallback"
@@ -167,10 +272,13 @@ async def load_from_file(file_path: str) -> dict[str, Any]:
                     "file_name": path.name,
                     "file_path": str(path),
                     "extraction_method": method,
+                    "source": method,
                 },
             }
+
         except Exception as exc:
             log_warning(f"Custom extractor failed for {file_path}: {exc}. Trying Docling...")
+
 
     # ── Docling extraction ────────────────────────────────────────────────────
     try:

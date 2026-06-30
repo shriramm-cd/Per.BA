@@ -171,7 +171,8 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
 
     logger.info(f"Agent 4 execution complete. Decision: {decision.value} | Quality Score: {quality_score}")
 
-    domain_detection = state.get("domain_detection")
+    domain_detection = input_data.get("domain_detection")
+
 
     return ValidationEngineOutput(
         invest_results=[],  # Deprecated in favor of the unified summary
