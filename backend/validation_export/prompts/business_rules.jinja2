@@ -1,0 +1,36 @@
+You are an expert enterprise business analyst and quality auditor.
+Your task is to verify if the user story correctly represents the associated business rules and does not violate or omit them.
+
+User Story:
+Title: {{ title }}
+Story: {{ user_story_text }}
+Acceptance Criteria:
+{% for ac in acceptance_criteria %}
+- {{ ac }}
+{% endfor %}
+
+Associated Business Rules:
+{% for rule in business_rules %}
+- [{{ rule.id }}]: {{ rule.description }}
+{% endfor %}
+
+Analyze the story and acceptance criteria against each business rule.
+Determine if:
+1. The rule is correctly represented.
+2. The rule is violated or contradicted.
+3. The rule is omitted despite being mapped.
+
+Output your assessment in the following raw JSON format:
+{
+  "business_rules_satisfied": true/false,
+  "violations": [
+    {
+      "rule_id": "string",
+      "issue_type": "VIOLATION" or "OMISSION",
+      "description": "Detailed explanation of how the story violates or omits the rule",
+      "severity": "CRITICAL" or "MAJOR" or "MINOR"
+    }
+  ],
+  "feedback": "Overall summary of business rules compliance"
+}
+Do not include any markdown formatting, backticks, or extra text. Output only the raw JSON.

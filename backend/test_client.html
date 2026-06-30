@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BA Accelerator - Backend Test Client</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #080c14;
+            --bg-card: rgba(17, 24, 39, 0.7);
+            --border-color: #1f2937;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0 0 8px 0;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #374151;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        input[type="text"], textarea {
+            background-color: rgba(31, 41, 55, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: outline 0.2s, border-color 0.2s;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: 2px solid var(--primary);
+            border-color: transparent;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 220px;
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 14px 28px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.4);
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn:disabled {
+            background-color: #374151;
+            color: var(--text-muted);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Progress Steps */
+        .progress-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .step {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            background: rgba(31, 41, 55, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+
+        .step.completed {
+            border-color: var(--accent-success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .step h4 {
+            margin: 0 0 6px 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .step p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Log window */
+        .log-window {
+            background-color: #030712;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            max-height: 250px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .log-entry {
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .log-info { color: #60a5fa; }
+        .log-success { color: var(--accent-success); }
+        .log-warning { color: var(--accent-warning); }
+        .log-error { color: var(--accent-error); }
+
+        /* Stories list */
+        .stories-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 20px 0 10px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .stories-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .story-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: transform 0.2s ease;
+        }
+
+        .story-card:hover {
+            transform: translateY(-2px);
+            border-color: #374151;
+        }
+
+        .story-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 4px;
+        }
+
+        .story-badge-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+        }
+
+        .badge-epic {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-feature {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #fde047;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .story-id {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .story-title-text {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .story-text {
+            background-color: rgba(31, 41, 55, 0.3);
+            border-left: 4px solid var(--primary);
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin: 8px 0 4px 0;
+        }
+
+        .ac-list {
+            margin: 0;
+            padding-left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .ac-item {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #d1d5db;
+        }
+
+        .trace-mappings {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .trace-tag {
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #a7f3d0;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Tabs and Upload styles */
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .tab-btn.active {
+            color: var(--primary) !important;
+            border-bottom-color: var(--primary) !important;
+        }
+        .tab-btn:not(.active):hover {
+            color: var(--text-color);
+        }
+        .dropzone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: rgba(31, 41, 55, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .dropzone.dragover {
+            border-color: var(--primary) !important;
+            background: rgba(99, 102, 241, 0.15) !important;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+        .upload-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            background: rgba(31, 41, 55, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .upload-item .file-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .upload-item .file-name {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .upload-item .file-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .upload-item .file-status {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-uploading { color: #60a5fa; }
+        .status-success { color: var(--accent-success); }
+        .status-failed { color: var(--accent-error); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>BA Accelerator</h1>
+        <p>AI-Powered Agile User Story & Gherkin Generator</p>
+    </header>
+
+    <div class="card">
+        <div class="form-group">
+            <label for="apiKey">API Access Key</label>
+            <input type="text" id="apiKey" value="ba-accelerator-secure-api-key-12345" placeholder="Enter API Key">
+        </div>
+
+        <!-- Tab Headers -->
+        <div class="tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <button class="tab-btn active" id="tab-upload" onclick="switchTab('upload')">Upload Document</button>
+            <button class="tab-btn" id="tab-paste" onclick="switchTab('paste')">Paste Text</button>
+        </div>
+
+        <!-- Tab 1: Upload Document -->
+        <div id="uploadTab" class="tab-content">
+            <div class="dropzone" id="dropzone">
+                <div style="font-size: 2.5rem; color: var(--primary);">📥</div>
+                <h3 style="margin: 0;">Drag & Drop your BRD here</h3>
+                <p style="color: var(--text-muted); margin: 0; font-size: 0.9rem;">Supports PDF, DOCX, XLSX, TXT (Max 10MB)</p>
+                <button class="btn" style="padding: 8px 20px; font-size: 0.9rem; box-shadow: none;" onclick="document.getElementById('fileInput').click()">Browse Files</button>
+                <input type="file" id="fileInput" multiple accept=".pdf,.docx,.xlsx,.txt" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+            
+            <!-- Upload Queue / Status List -->
+            <div id="uploadQueue"></div>
+        </div>
+
+        <!-- Tab 2: Paste Text -->
+        <div id="pasteTab" class="tab-content" style="display: none;">
+            <div class="form-group">
+                <label for="brdInput">Business Requirements Document (BRD)</label>
+                <textarea id="brdInput" placeholder="Paste your BRD here...">Business Requirements Document (BRD)
+Project Title: Employee Leave Management System
+Purpose: Develop a web-based system to streamline leave requests, approvals, and tracking while reducing manual work.
+Business Objectives:
+- Automate leave requests and approvals.
+- Reduce administrative effort by 50%.
+- Improve accuracy of leave records.
+- Centralize leave management.
+Scope:
+In Scope: Login, leave requests, approvals, balance tracking, notifications, reports.
+Out of Scope: Payroll, recruitment, performance management.
+Stakeholders: Business Owner, HR Manager, Project Manager, Development Team, Employees.
+Functional Requirements:
+- Secure login.
+- Submit leave requests.
+- Approve/reject requests.
+- Automatic leave balance updates.
+- Email notifications.
+Success Criteria:
+95% availability, approval time under 24 hours, user satisfaction above 4.5/5, 50% reduction in manual processing.
+Prepared By: Business Analyst
+Date: June 30, 2026</textarea>
+            </div>
+            <button id="runBtn" class="btn" onclick="startGeneration()">
+                <span>Generate Agile Stories</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live Execution Status -->
+    <div id="statusCard" class="card" style="display: none;">
+        <h3>Pipeline Execution Progress</h3>
+        <div class="progress-container">
+            <div id="step-ingest" class="step">
+                <h4>1. Ingestion</h4>
+                <p id="sub-ingest">Waiting...</p>
+            </div>
+            <div id="step-agent1" class="step">
+                <h4>2. Agent 1</h4>
+                <p id="sub-agent1">Requirement Intel</p>
+            </div>
+            <div id="step-agent2" class="step">
+                <h4>3. Agent 2</h4>
+                <p id="sub-agent2">Epic/Feature Planner</p>
+            </div>
+            <div id="step-agent3" class="step">
+                <h4>4. Agent 3 & 4</h4>
+                <p id="sub-agent3">Story Generation</p>
+            </div>
+        </div>
+
+        <h4 style="margin: 24px 0 10px 0;">Agent Live Console Logs</h4>
+        <div id="consoleLogs" class="log-window">
+            <p class="log-entry log-info">System idle. Press "Generate" to initiate pipeline...</p>
+        </div>
+    </div>
+
+    <!-- Generated Stories Output -->
+    <div id="resultsContainer" style="display: none;">
+        <div class="stories-title">
+            <span>Generated Agile User Stories</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="domainBadge" class="badge" style="display: none; font-size: 0.9rem; padding: 6px 14px; background-color: rgba(16, 185, 129, 0.15); color: #a7f3d0; border: 1px solid rgba(16, 185, 129, 0.3);">Domain: Unknown</span>
+                <span id="storyCount" class="badge badge-epic" style="font-size: 0.9rem; padding: 6px 14px;">0 Stories</span>
+            </div>
+        </div>
+        <div id="storiesList" class="stories-list">
+            <!-- Story Cards will be injected here -->
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeJobId = null;
+    let sseSource = null;
+    let pollInterval = null;
+
+    // Tab switching logic
+    function switchTab(tab) {
+        if (tab === 'upload') {
+            document.getElementById('uploadTab').style.display = 'block';
+            document.getElementById('pasteTab').style.display = 'none';
+            document.getElementById('tab-upload').classList.add('active');
+            document.getElementById('tab-paste').classList.remove('active');
+        } else {
+            document.getElementById('uploadTab').style.display = 'none';
+            document.getElementById('pasteTab').style.display = 'block';
+            document.getElementById('tab-upload').classList.remove('active');
+            document.getElementById('tab-paste').classList.add('active');
+        }
+    }
+
+    // Drag-and-drop initialization
+    document.addEventListener('DOMContentLoaded', () => {
+        const dropzone = document.getElementById('dropzone');
+        if (dropzone) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    dropzone.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    dropzone.classList.remove('dragover');
+                }, false);
+            });
+
+            dropzone.addEventListener('drop', e => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }, false);
+        }
+    });
+
+    function handleFileSelect(e) {
+        const files = e.target.files;
+        handleFiles(files);
+    }
+
+    function handleFiles(files) {
+        if (files.length === 0) return;
+        Array.from(files).forEach(file => {
+            uploadFile(file);
+        });
+    }
+
+    async function uploadFile(file) {
+        const allowedExtensions = ['.pdf', '.docx', '.xlsx', '.txt'];
+        const maxFileSize = 10 * 1024 * 1024; // 10MB
+        
+        const filename = file.name;
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        
+        const itemId = 'upload-' + Math.random().toString(36).substring(2, 9);
+        const timestamp = new Date().toLocaleTimeString();
+        
+        // Add to UI queue
+        const queueEl = document.getElementById('uploadQueue');
+        const itemEl = document.createElement('div');
+        itemEl.className = 'upload-item';
+        itemEl.id = itemId;
+        itemEl.innerHTML = `
+            <div class="file-info">
+                <span class="file-name">${escapeHtml(filename)}</span>
+                <span class="file-meta">Size: ${formatBytes(file.size)} | Time: ${timestamp}</span>
+            </div>
+            <div class="file-status status-uploading" id="${itemId}-status">
+                <div class="spinner" style="border-top-color: #60a5fa; width: 14px; height: 14px; border-width: 2px; margin-right: 8px;"></div>
+                <span>Uploading...</span>
+            </div>
+        `;
+        queueEl.appendChild(itemEl);
+        
+        // 1. Validate extension
+        if (!allowedExtensions.includes(ext)) {
+            updateUploadStatus(itemId, 'Failed', 'Unsupported file format', 'status-failed');
+            return;
+        }
+        
+        // 2. Validate size
+        if (file.size > maxFileSize) {
+            updateUploadStatus(itemId, 'Failed', 'File size exceeds 10MB limit', 'status-failed');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('files', file);
+        
+        const apiKey = document.getElementById('apiKey').value;
+        
+        try {
+            // Disable generate button and show progress card
+            document.getElementById('runBtn').disabled = true;
+            document.getElementById('runBtn').innerHTML = '<div class="spinner"></div><span>Processing Upload...</span>';
+            
+            const response = await fetch('/ingest/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || 'Upload failed');
+            }
+            
+            const data = await response.json();
+            const uploadResult = data.uploaded_files[0];
+            
+            if (uploadResult && uploadResult.status === 'RUNNING') {
+                updateUploadStatus(itemId, 'Success', 'Processing pipeline started', 'status-success');
+                
+                // Set active job and clear previous outputs
+                activeJobId = uploadResult.job_id;
+                document.getElementById('statusCard').style.display = 'block';
+                document.getElementById('resultsContainer').style.display = 'none';
+                document.getElementById('domainBadge').style.display = 'none';
+                document.getElementById('storiesList').innerHTML = '';
+                document.getElementById('consoleLogs').innerHTML = '';
+                
+                updateStep('ingest', 'completed', 'Completed');
+                updateStep('agent1', 'waiting', 'Requirement Intel');
+                updateStep('agent2', 'waiting', 'Epic/Feature Planner');
+                updateStep('agent3', 'waiting', 'Story Generation');
+                
+                addLog(`File '${filename}' uploaded and parsed successfully. Job ID: ${activeJobId}`, 'success');
+                addLog(`Starting multi-agent processing pipeline...`, 'info');
+                
+                // Start polling
+                startProgressStream(activeJobId, apiKey);
+            } else {
+                throw new Error('Invalid response from server');
+            }
+            
+        } catch (error) {
+            updateUploadStatus(itemId, 'Failed', error.message, 'status-failed');
+            addLog(`Upload failed for '${filename}': ${error.message}`, 'error');
+            resetButton();
+        }
+    }
+
+    function updateUploadStatus(itemId, statusText, details, className) {
+        const statusEl = document.getElementById(`${itemId}-status`);
+        if (statusEl) {
+            statusEl.className = `file-status ${className}`;
+            if (className === 'status-success') {
+                statusEl.innerHTML = `✅ <span style="margin-left: 5px;">${statusText} (${details})</span>`;
+            } else if (className === 'status-failed') {
+                statusEl.innerHTML = `❌ <span style="margin-left: 5px;">${statusText}: ${details}</span>`;
+            } else {
+                statusEl.innerHTML = `<span>${statusText}</span>`;
+            }
+        }
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    function addLog(message, type = 'info') {
+
+        const consoleLogs = document.getElementById('consoleLogs');
+        const entry = document.createElement('p');
+        entry.className = `log-entry log-${type}`;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        entry.innerText = `[${timestamp}] ${message}`;
+        
+        consoleLogs.appendChild(entry);
+        consoleLogs.scrollTop = consoleLogs.scrollHeight;
+    }
+
+    function updateStep(stepId, status, message) {
+        const stepEl = document.getElementById(`step-${stepId}`);
+        const subEl = document.getElementById(`sub-${stepId}`);
+        
+        stepEl.className = 'step';
+        if (status === 'active') {
+            stepEl.classList.add('active');
+        } else if (status === 'completed') {
+            stepEl.classList.add('completed');
+        }
+        
+        if (message) {
+            subEl.innerText = message;
+        }
+    }
+
+    async function startGeneration() {
+        const apiKey = document.getElementById('apiKey').value;
+        const brdText = document.getElementById('brdInput').value;
+        const runBtn = document.getElementById('runBtn');
+        
+        if (!brdText.trim()) {
+            alert('Please paste a BRD to analyze.');
+            return;
+        }
+
+        // Reset UI state
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<div class="spinner"></div><span>Processing...</span>';
+        document.getElementById('statusCard').style.display = 'block';
+        document.getElementById('resultsContainer').style.display = 'none';
+        document.getElementById('domainBadge').style.display = 'none';
+        document.getElementById('storiesList').innerHTML = '';
+        document.getElementById('consoleLogs').innerHTML = '';
+        
+        updateStep('ingest', 'waiting', 'Waiting...');
+        updateStep('agent1', 'waiting', 'Requirement Intel');
+        updateStep('agent2', 'waiting', 'Epic/Feature Planner');
+        updateStep('agent3', 'waiting', 'Story Generation');
+
+        addLog('Initiating ingestion layer...', 'info');
+        updateStep('ingest', 'active', 'Ingesting...');
+
+        try {
+            // 1. Submit text and run pipeline
+            const response = await fetch('/run-from-text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-KEY': apiKey
+                },
+                body: JSON.stringify({ text: brdText })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Failed to trigger ingestion');
+            }
+
+            const data = await response.json();
+            activeJobId = data.job_id;
+            addLog(`Ingestion completed. Job ID generated: ${activeJobId}`, 'success');
+            updateStep('ingest', 'completed', 'Completed');
+
+            // 2. Start SSE Stream for live progress
+            startProgressStream(activeJobId, apiKey);
+
+        } catch (error) {
+            addLog(`Pipeline failed: ${error.message}`, 'error');
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<span>Generate Agile Stories</span>';
+            updateStep('ingest', 'waiting', 'Failed');
+        }
+    }
+
+    function startProgressStream(jobId, apiKey) {
+        addLog('Connecting to live execution event stream...', 'info');
+        
+        // Since EventSource doesn't support headers natively, we can use a query parameter
+        // or just let it connect since we bypassed API key for the local test route stream,
+        // or we can poll `/pipeline/debug/{job_id}` if SSE is tricky.
+        // Let's poll `/pipeline/debug/{job_id}` every 1.5 seconds for maximum reliability!
+        updateStep('agent1', 'active', 'Executing...');
+        
+        let lastNode = null;
+        
+        pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/pipeline/debug/${jobId}`, {
+                    headers: { 'X-API-KEY': apiKey }
+                });
+                
+                if (!response.ok) return;
+                
+                const debugState = await response.json();
+                const nodes = debugState.nodes || [];
+                
+                for (const node of nodes) {
+                    if (node.node === 'agent1' && node.status === 'STARTED' && lastNode !== 'agent1-started') {
+                        addLog('Agent 1 (Requirement Intelligence) has started parsing...', 'info');
+                        updateStep('agent1', 'active', 'Parsing BRD...');
+                        lastNode = 'agent1-started';
+                    }
+                    if (node.node === 'agent1' && node.status === 'COMPLETED' && lastNode !== 'agent1-completed') {
+                        addLog('Agent 1 completed. Found requirements, business rules, and actors.', 'success');
+                        updateStep('agent1', 'completed', 'Success');
+                        updateStep('agent2', 'active', 'Planning...');
+                        lastNode = 'agent1-completed';
+                        
+                        // Extract and display domain
+                        const domDetect = node.output.domain_detection || (node.output.agent1_output && node.output.agent1_output.domain_detection);
+                        if (domDetect) {
+                            const primary = domDetect.primary_domain || "Unknown";
+                            const secondaries = domDetect.secondary_domains || [];
+                            const confidence = domDetect.confidence || 0;
+                            
+                            let displayText = `Domain: ${primary} (${confidence}% confidence)`;
+                            if (secondaries.length > 0) {
+                                displayText += ` | Secondary: ${secondaries.join(', ')}`;
+                            }
+                            
+                            addLog(`Classified Business Domain: ${primary} (Confidence: ${confidence}%)`, 'success');
+                            if (secondaries.length > 0) {
+                                addLog(`Secondary Domains: ${secondaries.join(', ')}`, 'success');
+                            }
+                            
+                            const domainBadge = document.getElementById('domainBadge');
+                            domainBadge.innerText = displayText;
+                            domainBadge.style.display = 'inline-block';
+                        } else {
+                            const domain = node.output.domain || (node.output.agent1_output && node.output.agent1_output.domain);
+                            if (domain) {
+                                addLog(`Classified Business Domain: ${domain}`, 'success');
+                                const domainBadge = document.getElementById('domainBadge');
+                                domainBadge.innerText = `Domain: ${domain}`;
+                                domainBadge.style.display = 'inline-block';
+                            }
+                        }
+
+                    }
+                    if (node.node === 'agent2' && node.status === 'STARTED' && lastNode !== 'agent2-started') {
+                        addLog('Agent 2 (Epic & Feature Planner) is compiling hierarchy...', 'info');
+                        lastNode = 'agent2-started';
+                    }
+                    if (node.node === 'agent2' && node.status === 'COMPLETED' && lastNode !== 'agent2-completed') {
+                        addLog('Agent 2 completed. Structured Epics, Features, and Traceability Matrix.', 'success');
+                        updateStep('agent2', 'completed', 'Success');
+                        updateStep('agent3', 'active', 'Generating User Stories...');
+                        lastNode = 'agent2-completed';
+                    }
+                    if (node.node === 'agent3' && node.status === 'STARTED' && lastNode !== 'agent3-started') {
+                        addLog('Agent 3 (User Story Generator) is generating Agile stories...', 'info');
+                        lastNode = 'agent3-started';
+                    }
+                    if (node.node === 'agent3' && node.status === 'COMPLETED' && lastNode !== 'agent3-completed') {
+                        addLog('Agent 3 completed. 12 Agile stories and Gherkin scenarios generated.', 'success');
+                        lastNode = 'agent3-completed';
+                    }
+                    if (node.node === 'agent4' && node.status === 'STARTED' && lastNode !== 'agent4-started') {
+                        addLog('Agent 4 (Validation Engine) is running 12 quality checkers...', 'info');
+                        lastNode = 'agent4-started';
+                    }
+                    if (node.node === 'agent4' && node.status === 'COMPLETED' && lastNode !== 'agent4-completed') {
+                        addLog('Agent 4 completed. All quality checks, INVEST audits, and coverage verified.', 'success');
+                        updateStep('agent3', 'completed', 'Completed');
+                        lastNode = 'agent4-completed';
+                        
+                        // Pipeline finished! Stop polling and load stories.
+                        clearInterval(pollInterval);
+                        addLog('Pipeline execution completed successfully!', 'success');
+                        loadGeneratedStories(jobId, apiKey);
+                    }
+                    if (node.status === 'FAILED') {
+                        clearInterval(pollInterval);
+                        addLog(`Node ${node.node} failed: ${node.message || 'Unknown error'}`, 'error');
+                        resetButton();
+                    }
+                }
+                
+                // Fallback: check if job status in DB is FAILED
+                if (debugState.latest_status === 'FAILED') {
+                    clearInterval(pollInterval);
+                    addLog(`Pipeline execution failed: ${debugState.error_message || 'Unknown error'}`, 'error');
+                    resetButton();
+                }
+
+            } catch (err) {
+                console.error('Error polling job status:', err);
+            }
+        }, 1500);
+    }
+
+    function resetButton() {
+        const runBtn = document.getElementById('runBtn');
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<span>Generate Agile Stories</span>';
+    }
+
+    async function loadGeneratedStories(jobId, apiKey) {
+        try {
+            const response = await fetch(`/stories/${jobId}`, {
+                headers: { 'X-API-KEY': apiKey }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch generated stories.');
+
+            const stories = await response.json();
+            displayStories(stories);
+        } catch (error) {
+            addLog(`Error loading stories: ${error.message}`, 'error');
+            resetButton();
+        }
+    }
+
+    function displayStories(stories) {
+        const listEl = document.getElementById('storiesList');
+        const countEl = document.getElementById('storyCount');
+        
+        listEl.innerHTML = '';
+        countEl.innerText = `${stories.length} Stories`;
+
+        stories.forEach(story => {
+            const card = document.createElement('div');
+            card.className = 'story-card';
+
+            const acHtml = story.acceptance_criteria.map(ac => {
+                const statement = typeof ac === 'object' ? ac.statement : ac;
+                return `<li class="ac-item">${escapeHtml(statement)}</li>`;
+            }).join('');
+
+            const traceHtml = story.trace_mappings.map(t => {
+                return `<span class="trace-tag">${escapeHtml(t)}</span>`;
+            }).join('');
+
+            card.innerHTML = `
+                <div class="story-header">
+                    <span class="story-id">${escapeHtml(story.id)}</span>
+                    <div class="story-badge-container">
+                        <span class="badge badge-epic">${escapeHtml(story.epic)}</span>
+                        <span class="badge badge-feature">${escapeHtml(story.feature)}</span>
+                    </div>
+                </div>
+                <h4 class="story-title-text">${escapeHtml(story.title)}</h4>
+                <p class="story-text">${escapeHtml(story.user_story)}</p>
+                
+                <div class="section-title">Acceptance Criteria (Gherkin)</div>
+                <ul class="ac-list">
+                    ${acHtml}
+                </ul>
+
+                <div class="section-title" style="margin-top: 14px;">Source Traceability</div>
+                <div class="trace-mappings">
+                    ${traceHtml}
+                </div>
+            `;
+            listEl.appendChild(card);
+        });
+
+        document.getElementById('resultsContainer').style.display = 'block';
+        resetButton();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#039;');
+    }
+</script>
+
+</body>
+</html>

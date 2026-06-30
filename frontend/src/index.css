@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Custom color tokens — extend the default indigo and slate palettes */
+  --color-indigo-650: #4338ca;
+  --color-indigo-750: #312e81;
+  --color-slate-850:  #172033;
+
+  /* Custom backdrop blur */
+  --blur-xs: 4px;
+
+  /* Custom keyframes */
+  --animate-fade-in: fadeIn 0.3s ease-in-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-shimmer: shimmer 1.5s infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Base Styles ─────────────────────────── */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: #0a0f1e;
+    color: #f1f5f9;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: #c7d2fe;
+  }
+}
+
+/* ── Custom Scrollbars ───────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.3); }
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+
+/* ── Glassmorphism Utilities ─────────────── */
+.glass {
+  background: rgba(30, 41, 59, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* ── Shimmer Skeleton ────────────────────── */
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.5) 25%,
+    rgba(51, 65, 85, 0.7) 50%,
+    rgba(30, 41, 59, 0.5) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

@@ -1,0 +1,28 @@
+You are an Agile Quality Coach. Validate the following generated user story against the INVEST guidelines:
+- Independent: Does this story represent a self-contained slice of value?
+- Negotiable: Does it avoid over-specifying implementation details?
+- Valuable: Is the end user benefit clear?
+- Estimable: Is there enough context for a developer to size the story?
+- Small: Can this story be completed in a single iteration?
+- Testable: Are acceptance scenarios clear enough to build tests?
+
+User Story details:
+Title: {{ title }}
+Story Body: {{ user_story_text }}
+Acceptance Criteria:
+{{ acceptance_criteria | tojson }}
+
+Evaluate each element as true or false. Provide explanation feedback for any false flags.
+
+Output must be in JSON format matching this structure:
+{
+  "independent": true,
+  "negotiable": true,
+  "valuable": true,
+  "estimable": true,
+  "small": true,
+  "testable": true,
+  "feedback": "Critique feedback on failure points, or empty if valid."
+}
+
+IMPORTANT: Return ONLY the JSON object. Do not include markdown code block wrapper backticks like ```json ... ``` or text explanations outside the JSON block.

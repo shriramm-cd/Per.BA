@@ -1,0 +1,46 @@
+# ──────────────────────────────────────────────────────────
+#  designlab-core — Application Configuration
+#  Non-secret, version-controlled settings.
+#  Secrets (API keys, URLs) live in .env — not here.
+# ──────────────────────────────────────────────────────────
+
+app:
+  name: designlab-core
+  version: "0.1.0"
+
+llm:
+  default_model: claude-3-5-sonnet-20241022
+  timeout_seconds: 60
+  max_retries: 3
+  retry_wait_seconds: 2
+  max_tokens: 4096
+  retry_max_multiplier: 8
+
+  # Supported model aliases — map friendly names to provider model IDs
+  models:
+    claude-sonnet: claude-3-5-sonnet-20241022
+    claude-haiku: claude-3-haiku-20240307
+    gpt-4o: gpt-4o
+    gpt-4o-mini: gpt-4o-mini
+
+logging:
+  level: INFO              # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s [%(levelname)s] %(name)s — %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  file_path: "logs/designlab.txt"
+  file_level: "INFO"
+  file_max_bytes: 10485760
+  file_backup_count: 5
+
+api:
+  title: DesignLab Core API
+  version: "0.1.0"
+  prefix: /api
+  min_feature_length: 10
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8001"
+    - "http://localhost:8002"
+
+prompts:
+  max_list_display: 10

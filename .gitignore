@@ -1,0 +1,38 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+
+# Python caching & bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Local env files (highly sensitive)
+.env
+.env.*
+!.env.example
+
+# Build & build outputs
+dist/
+build/
+out/
+.next/
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Log directories
+logs/
+*.log

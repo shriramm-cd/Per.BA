@@ -1,0 +1,340 @@
+[
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Request and Approval",
+    "title": "Allows users to submit leave requests for approval.",
+    "user_story": "As a User, I want Submit a leave request for approval, so that Enable users to manage their leaves efficiently",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then the request is sent for approval within 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when their leave request is approved, then they receive a notification.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-001"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Request and Approval",
+    "title": "Streamlines leave requests, approvals, and tracking, reducing manual work for users.",
+    "user_story": "As a User, I want Streamline leave requests, approvals, and tracking, so that Reduce manual work",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then the system sends a notification to the approver.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given an approver, when they receive a leave request, then they can approve or reject it within 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-002"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Request and Approval",
+    "title": "Allows users to submit leave requests for approval and track their leave balance.",
+    "user_story": "As a User, I want Submit a leave request for approval, so that Enable users to request time off",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then the request is sent for approval.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given an approved leave request, when the user checks their balance, then the balance is updated.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-003"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "System Security and Performance",
+    "feature": "Secure Login",
+    "title": "Enables users to securely log in to the system.",
+    "user_story": "As a User, I want Secure login, so that Access system securely",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they enter valid credentials, then they are authenticated.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when the system is available, then it is at least 95% of the time.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-004"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Balance Tracking",
+    "title": "Enables users to have their leave balances updated automatically.",
+    "user_story": "As a User, I want Have automatic leave balance updates, so that Accurately track leave balances",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user with existing leave balances, when a leave update occurs, then the leave balance is automatically updated.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user with no existing leave balances, when a new leave is added, then the leave balance is automatically initialized.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-005"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "System Security and Performance",
+    "feature": "System Performance and Availability",
+    "title": "Enhances system performance and availability to meet high user satisfaction and reduced manual processing goals.",
+    "user_story": "As a User, I want Experience high system availability and performance, so that Achieve user satisfaction above 4.5/5 with reduced manual processing",
+    "acceptance_criteria": [
+      {
+        "statement": "Given the system is operational, when the user interacts with it, then the system should be available 95% of the time.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user request, when it is submitted, then the approval time should be under 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given the system is used, when the user provides feedback, then the user satisfaction should be above 4.5/5.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given manual processes are in place, when the system is optimized, then there should be a 50% reduction in manual processing.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "FR-006"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Notifications and Reports",
+    "title": "Provides users with timely notifications and reports for efficient leave management.",
+    "user_story": "As a User, I want Receive timely notifications and reports for leave management, so that Enhanced user satisfaction through efficient leave management",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then they receive a notification within 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when the system is available, then it is accessible 95% of the time.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-001"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Notifications and Reports",
+    "title": "Provides users with timely notifications and reports for leave management.",
+    "user_story": "As a User, I want Receive notifications and reports for leave management, so that Stay informed about leave approvals and management",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then they receive a notification within 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when they access the leave management system, then they can view reports on leave history.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-002"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Request and Approval",
+    "title": "Allows users to submit leave requests for approval, ensuring timely processing and user satisfaction.",
+    "user_story": "As a User, I want Submit a leave request for approval, so that Enable users to manage their leave effectively",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they submit a leave request, then the request is sent for approval within 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when their leave request is approved, then they receive a notification.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-003"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "System Security and Performance",
+    "feature": "Secure Login",
+    "title": "Enables users to securely log in to the system.",
+    "user_story": "As a User, I want Secure login, so that Access system securely",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user, when they enter valid credentials, then they are authenticated.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user, when the system is available 95% of the time, then the user can access the system.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-004"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "Employee Leave Management System",
+    "feature": "Leave Balance Tracking",
+    "title": "Enables automatic updates to user leave balances.",
+    "user_story": "As a User, I want Have automatic leave balance updates, so that Accurate leave balance tracking",
+    "acceptance_criteria": [
+      {
+        "statement": "Given a user with existing leave balance, when a leave is approved, then the leave balance is updated automatically.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-005"
+    ],
+    "validation_results": null
+  },
+  {
+    "id": "US-001",
+    "epic": "System Security and Performance",
+    "feature": "System Performance and Availability",
+    "title": "Enhance system performance and availability to meet user satisfaction and business requirements.",
+    "user_story": "As a User, I want Experience high system availability and performance, so that Achieve user satisfaction above 4.5/5",
+    "acceptance_criteria": [
+      {
+        "statement": "Given the system is operational, when the user interacts with it, then the system should be available at least 95% of the time.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given a user submits a request, when the system processes it, then the approval time should be under 24 hours.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      },
+      {
+        "statement": "Given the system is available, when the user uses it, then the manual processing should be reduced by 50%.",
+        "scenario": "",
+        "given": "",
+        "when": "",
+        "then": ""
+      }
+    ],
+    "trace_mappings": [
+      "NFR-006"
+    ],
+    "validation_results": null
+  }
+]

@@ -1,0 +1,122 @@
+# BA Accelerator
+
+AI-Powered Requirement-to-User-Story Generation System
+
+---
+
+## 👥 Team Work Allocation (Backend Focus)
+
+To ensure rapid, decoupled, and conflict-free development, the backend implementation is divided among the 5 team members. Below is the allocation chart, operational boundaries, and verification targets for each member.
+
+### 🛠️ Core Team Responsibility Split
+
+```mermaid
+graph TD
+    M5[Member 5: Ingestion Layer] -->|Raw Text & Fingerprint| M12[Member 1 & 2: Agent 1, Agent 2 & Orchestrator]
+    M12 -->|Epics & Features Plan| M3[Member 3: Agent 3 Story Generator]
+    M3 -->|Agile User Stories| M4[Member 4: Agent 4 Validation Engine]
+```
+
+---
+
+### 1. 👥 Member 1 & 2: Agent-1, Agent-2 & Orchestration
+*   **Focus Area**: Requirement Extraction, Hierarchy Planning, and LangGraph Orchestration.
+*   **Target Files**:
+    *   `backend/agents/agent1_requirement_intelligence.py`
+    *   `backend/agents/agent2_epic_feature_planner.py`
+    *   `backend/agents/prompts/agent1.jinja2` & `agent2.jinja2`
+    *   `backend/orchestrator/` (entire directory: `graph.py`, `state.py`, `router.py`, `retry_handler.py`)
+*   **What you must do in your phase**:
+    1.  **Agent-1**: Retrieve raw ingested text from the GraphState, compile it with `agent1.jinja2`, call the LLM client, and parse the output into `RequirementIntelligenceOutput`. Ensure confidence scores, actors, business rules, and ambiguities are extracted.
+    2.  **Agent-2**: Take the extracted requirements list, group them into logical Epics and Features using the `agent2.jinja2` prompt, and output an `EpicFeaturePlannerOutput` mapping requirement IDs to Feature IDs.
+    3.  **Orchestrator**: Construct the compiled LangGraph `StateGraph` using `GraphState` as the single source of truth. Implement the quality loop: if confidence score < 0.75, trigger the retry handler to backtrack (up to 3 retries max); else, route forward. Implement the human review checkpoint interrupt before exporting.
+
+---
+
+### 2. 👥 Member 3: Agent-3 (User Story Generation)
+*   **Focus Area**: Agile User Story & Gherkin Acceptance Criteria Generation.
+*   **Target Files**:
+    *   `backend/agents/agent3_user_story_generator.py`
+    *   `backend/agents/prompts/agent3.jinja2`
+*   **What you must do in your phase**:
+    1.  **Parse Inputs**: Read the compiled Epics list, Features list, and trace hierarchy mapped by Member 1 & 2.
+    2.  **Generate Agile Stories**: For each planned feature, invoke the LLM using `agent3.jinja2` to draft stories in the format: `As a [role], I want to [action], so that [business value]`.
+    3.  **Draft Gherkin Scenarios**: Automatically generate comprehensive `Given-When-Then` acceptance scenarios for each user story.
+    4.  **Enforce Traceability**: Map each generated story back to its source requirement ID(s) inside the `trace_mappings` list.
+
+---
+
+### 3. 👥 Member 4: Agent-4 (Validation Engine)
+*   **Focus Area**: Automated Story Quality Audits and Verification.
+*   **Target Files**:
+    *   `backend/validation_export/agent4_validation_engine.py`
+    *   `backend/validation_export/invest_validator.py`
+    *   `backend/validation_export/hallucination_check.py`
+    *   `backend/validation_export/coverage_report.py`
+    *   `backend/validation_export/prompts/` (`invest.jinja2`, `hallucination.jinja2`)
+*   **What you must do in your phase**:
+    1.  **INVEST Validator**: Submits generated stories to the LLM to verify compliance against INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable).
+    2.  **Hallucination Checker**: Audits stories against their trace-mapped requirements. If the story details contain scopes/features not found in the original source, flag it as a hallucination.
+    3.  **Coverage Reporter**: Algorithmically compute the percentage of source requirements covered in the user stories.
+    4.  **Aggregate Quality Rating**: Compute the final score: `40% INVEST + 30% Hallucination Free + 30% Trace Coverage`. Set `is_approved = True` if the score is greater than or equal to 80/100.
+
+---
+
+### 4. 👥 Member 5: Ingestion Component & Connectors
+*   **Focus Area**: Document Ingestion, Clean-up, and Duplicate Prevention.
+*   **Target Files**:
+    *   `backend/ingestion/` (entire directory: `docling_loader.py`, `text_normalizer.py`, `fingerprint.py`)
+    *   `backend/ingestion/connectors/` (`base_connector.py`, `jira_connector.py`, `confluence_connector.py`, `sharepoint_connector.py`, `gdrive_connector.py`)
+*   **What you must do in your phase**:
+    1.  **Docling Document Loading**: Parse raw files (PDFs, DOCX, PPTX, images, web links) using the Docling engine, exporting structured markdown representations.
+    2.  **Connectors**: Implement auth connections to third-party endpoints. Download source documents or fetch tickets (e.g. Jira summary/descriptions, Confluence HTML page bodies).
+    3.  **Normalization**: Clean out double spaces/noise, run language detection heuristics, and split text into manageable chunk sizes.
+    4.  **Fingerprinting**: Calculate SHA256 hashes of cleaned text and register them in Redis. If a fingerprint exists, flag the document as a duplicate to bypass re-processing.
+
+---
+
+## ⚖️ Balance / Pending Work (Integration phase)
+
+The following components are shared/cross-cutting infrastructure. The team must allocate these tasks for integration testing once individual phases are completed:
+
+1.  **FastAPI API Routes (`backend/api/`)**:
+    *   Expose endpoints for ingesting documents (`POST /ingest`), triggering the pipeline (`POST /pipeline/run`), streaming live node execution state via Server-Sent Events (`GET /pipeline/stream/{job_id}`), fetching stories (`GET /stories/{job_id}`), and auditing history (`GET /audit/logs`).
+    *   Inject `X-API-KEY` verification middleware to protect endpoints.
+2.  **Database Persistence (`backend/db/` & `backend/db/models.py`)**:
+    *   Configure async SQLAlchemy engine connections.
+    *   Ensure that job status updates, extracted requirements, generated stories, and execution audit logs are successfully saved to PostgreSQL.
+3.  **Exporters (`backend/validation_export/exporters/`)**:
+    *   Implement exporting modules to write data into Excel (`openpyxl`), PDF reports (`reportlab`), JSON dumps, or push stories directly into Jira.
+
+---
+
+## 🚀 Getting Started (Verification)
+
+### Step 1: Environment Variables
+Create a local `.env` file in the `backend` directory copying `.env.example`:
+```bash
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ba_accelerator
+REDIS_URL=redis://localhost:6379/0
+GROQ_API_KEY=your-groq-key
+GEMINI_API_KEY=your-gemini-key
+API_KEY=ba-accelerator-secure-api-key-12345
+```
+
+### Step 2: Install dependencies
+```bash
+pip install -r backend/requirements.txt
+```
+
+### Step 3: Run Unit Tests
+Each developer must verify their changes by running modular test packages:
+```bash
+pytest backend/ingestion/tests/
+pytest backend/agents/tests/
+pytest backend/orchestrator/tests/
+pytest backend/validation_export/tests/
+pytest backend/api/tests/
+```
+
+# INTEGRATION NOTE
+# This README defines the team's operational scope.
+# Ensure that individual modules do not import directly from each other; only communicate via GraphState.

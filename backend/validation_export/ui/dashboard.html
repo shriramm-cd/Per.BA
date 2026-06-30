@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Validation Engine (Agent 4) - BA Accelerator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts (Outfit & Inter) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090d16;
+      color: #f8fafc;
+    }
+    h1, h2, h3, h4, .font-outfit {
+      font-family: 'Outfit', sans-serif;
+    }
+    /* Glassmorphism styling */
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.45);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+    }
+    .active-tab {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-80 glass-panel m-4 mr-2 flex flex-col justify-between p-6">
+    <div>
+      <!-- Header / Logo -->
+      <div class="flex items-center gap-3 mb-10">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-shield-halved text-white text-xl"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold tracking-wide bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">Agent 4</h2>
+          <p class="text-xs text-indigo-400 font-semibold uppercase tracking-widest">Validation Engine</p>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="space-y-2">
+        <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition active-tab">
+          <i class="fa-solid fa-chart-line text-lg"></i>
+          <span class="font-medium">Validation Dashboard</span>
+        </button>
+        <button onclick="switchTab('stories')" id="btn-stories" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition">
+          <i class="fa-solid fa-list-check text-lg"></i>
+          <span class="font-medium">Story Validation View</span>
+        </button>
+        <button onclick="switchTab('validators')" id="btn-validators" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition">
+          <i class="fa-solid fa-vial-circle-check text-lg"></i>
+          <span class="font-medium">Validator Results</span>
+        </button>
+        <button onclick="switchTab('review')" id="btn-review" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition">
+          <i class="fa-solid fa-user-check text-lg"></i>
+          <span class="font-medium">BA Review Screen</span>
+        </button>
+        <button onclick="switchTab('rework')" id="btn-rework" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition">
+          <i class="fa-solid fa-rotate-left text-lg"></i>
+          <span class="font-medium">Revision Package Viewer</span>
+        </button>
+        <button onclick="switchTab('audit')" id="btn-audit" class="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-left text-slate-300 hover:bg-slate-800/40 transition">
+          <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+          <span class="font-medium">Audit Trail</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- User Profile Footer -->
+    <div class="glass-card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+        <i class="fa-solid fa-user-tie text-indigo-400"></i>
+      </div>
+      <div>
+        <h4 class="text-sm font-semibold">Lead Business Analyst</h4>
+        <p class="text-xs text-slate-400">Enterprise Reviewer</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 overflow-y-auto p-6 space-y-6">
+
+    <!-- Top Bar -->
+    <header class="flex justify-between items-center pb-4 border-b border-slate-800">
+      <div>
+        <h1 class="text-3xl font-extrabold tracking-tight" id="page-title">Validation Dashboard</h1>
+        <p class="text-slate-400 text-sm mt-1">Real-time quality gates, coverage metrics, and revision packages.</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="relative">
+          <input type="text" id="input-job-id" placeholder="Enter Job ID..." value="DEV-JOB-123" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm w-64 focus:outline-none focus:border-indigo-500 text-slate-200">
+        </div>
+        <button onclick="loadJobData()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition shadow-lg shadow-indigo-600/20">
+          <i class="fa-solid fa-arrows-rotate mr-2"></i>Fetch Job Data
+        </button>
+      </div>
+    </header>
+
+    <!-- TAB 1: Validation Dashboard -->
+    <div id="tab-dashboard" class="tab-content space-y-6">
+      <!-- KPI Stats Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="glass-panel p-6 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Quality Rating</p>
+            <h3 class="text-3xl font-extrabold mt-2 text-indigo-400" id="kpi-quality-score">94.5%</h3>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-xl">
+            <i class="fa-solid fa-award"></i>
+          </div>
+        </div>
+        <div class="glass-panel p-6 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Trace Coverage</p>
+            <h3 class="text-3xl font-extrabold mt-2 text-emerald-400" id="kpi-coverage">98.2%</h3>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xl">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+        </div>
+        <div class="glass-panel p-6 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Critical Issues</p>
+            <h3 class="text-3xl font-extrabold mt-2 text-rose-400" id="kpi-critical">0</h3>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400 text-xl">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+        </div>
+        <div class="glass-panel p-6 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Routing Decision</p>
+            <h3 class="text-2xl font-extrabold mt-3 px-3 py-1 rounded-lg text-center bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 inline-block" id="kpi-decision">PASS</h3>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-xl">
+            <i class="fa-solid fa-route"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-panel p-6">
+          <h3 class="text-lg font-bold mb-4">Quality Score Radar</h3>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="chart-radar"></canvas>
+          </div>
+        </div>
+        <div class="glass-panel p-6">
+          <h3 class="text-lg font-bold mb-4">Validator Performance (ms)</h3>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="chart-performance"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Story Validation View -->
+    <div id="tab-stories" class="tab-content hidden space-y-6">
+      <div class="glass-panel p-6">
+        <h3 class="text-xl font-bold mb-4">User Story Inspection Grid</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 text-sm">
+                <th class="py-4 px-4">Story ID</th>
+                <th class="py-4 px-4">Title</th>
+                <th class="py-4 px-4">Trace Link</th>
+                <th class="py-4 px-4">INVEST Status</th>
+                <th class="py-4 px-4">Action</th>
+              </tr>
+            </thead>
+            <tbody id="table-stories-body" class="text-sm divide-y divide-slate-800/40">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Validator Results -->
+    <div id="tab-validators" class="tab-content hidden space-y-6">
+      <div class="glass-panel p-6">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold">Granular Validator Findings</h3>
+          <div class="flex gap-2">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">CRITICAL</span>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">MAJOR</span>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">MINOR</span>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-500/20 text-slate-300 border border-slate-500/30">INFO</span>
+          </div>
+        </div>
+        <div class="space-y-4" id="list-findings">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: BA Review Screen -->
+    <div id="tab-review" class="tab-content hidden space-y-6">
+      <div class="glass-panel p-6 max-w-3xl mx-auto space-y-6">
+        <h3 class="text-xl font-bold border-b border-slate-800 pb-4">Submit Manual BA Decision</h3>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Reviewer Name</label>
+            <input type="text" id="review-reviewer" value="Lead Business Analyst" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Decision Outcome</label>
+            <div class="grid grid-cols-3 gap-4">
+              <button onclick="selectDecision('APPROVE')" id="btn-dec-approve" class="py-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-bold transition hover:bg-emerald-500/20 flex flex-col items-center gap-2">
+                <i class="fa-solid fa-circle-check text-2xl"></i>Approve
+              </button>
+              <button onclick="selectDecision('REWORK')" id="btn-dec-rework" class="py-4 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-300 font-bold transition hover:bg-amber-500/10 flex flex-col items-center gap-2">
+                <i class="fa-solid fa-rotate-left text-2xl"></i>Request Rework
+              </button>
+              <button onclick="selectDecision('REJECT')" id="btn-dec-reject" class="py-4 rounded-xl border border-rose-500/30 bg-rose-500/5 text-rose-300 font-bold transition hover:bg-rose-500/10 flex flex-col items-center gap-2">
+                <i class="fa-solid fa-ban text-2xl"></i>Reject
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Comments & Feedback</label>
+            <textarea id="review-comments" placeholder="Describe findings, required revisions, or approval context..." rows="5" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <button onclick="submitBAReview()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/20 mt-4">
+            Submit BA Decision
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: Revision Package Viewer -->
+    <div id="tab-rework" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Preserve Section -->
+        <div class="glass-panel p-6 space-y-4">
+          <div class="flex items-center gap-3 text-emerald-400 border-b border-slate-800 pb-3">
+            <i class="fa-solid fa-lock text-xl"></i>
+            <h3 class="text-lg font-bold">PRESERVE SECTION (Immutable)</h3>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs text-slate-400 uppercase font-semibold">Story Title / Actor</p>
+              <p class="text-sm font-medium mt-1 text-slate-200" id="rework-preserve-title">Dashboard View / Actor: Lead BA</p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 uppercase font-semibold">Traceability Links</p>
+              <ul class="list-disc list-inside text-sm text-slate-300 mt-1" id="rework-preserve-traces">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 uppercase font-semibold">Approved Business Rules</p>
+              <ul class="list-disc list-inside text-sm text-slate-300 mt-1" id="rework-preserve-rules">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modify Section -->
+        <div class="glass-panel p-6 space-y-4">
+          <div class="flex items-center gap-3 text-amber-400 border-b border-slate-800 pb-3">
+            <i class="fa-solid fa-pen-to-square text-xl"></i>
+            <h3 class="text-lg font-bold">MODIFY SECTION (Actionable Rework)</h3>
+          </div>
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs text-slate-400 uppercase font-semibold">Failed Acceptance Criteria</p>
+              <ul class="list-disc list-inside text-sm text-slate-300 mt-1" id="rework-modify-ac">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 uppercase font-semibold">Identified Coverage Gaps</p>
+              <ul class="list-disc list-inside text-sm text-slate-300 mt-1" id="rework-modify-coverage">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: Audit Trail -->
+    <div id="tab-audit" class="tab-content hidden space-y-6">
+      <div class="glass-panel p-6">
+        <h3 class="text-xl font-bold mb-4">Pipeline Execution Audit Logs</h3>
+        <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2" id="list-audit-logs">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let selectedDecision = 'APPROVE';
+    let mockData = {
+      "job_id": "DEV-JOB-123",
+      "decision": "PASS",
+      "summary": {
+        "critical_count": 0,
+        "major_count": 1,
+        "minor_count": 2,
+        "info_count": 1,
+        "execution_time": 420.5,
+        "validators_passed": ["structural_validator", "traceability_validator", "coverage_validator", "business_rules_validator", "dependency_validator", "acceptance_criteria_validator", "invest_validator", "semantic_validator", "hallucination_validator", "consistency_validator", "duplicate_validator", "technical_validator"],
+        "validators_failed": []
+      },
+      "findings": [
+        {
+          "id": "INVEST-SMALL-ST-001",
+          "validator_name": "invest_validator",
+          "title": "INVEST Check: Story is too large",
+          "description": "Story contains more than 8 acceptance criteria. Size boundary exceeded.",
+          "severity": "MINOR",
+          "field": "user_story_text",
+          "mitigation": "Split the story into smaller vertical slices of value."
+        },
+        {
+          "id": "TECH-PERFORMANCE-ST-002",
+          "validator_name": "technical_validator",
+          "title": "Technical: Missing Performance Thresholds",
+          "description": "Story involves database query operations but does not specify response time thresholds.",
+          "severity": "MINOR",
+          "field": "acceptance_criteria",
+          "mitigation": "Add acceptance criteria specifying response time under 2 seconds."
+        }
+      ],
+      "reports": {
+        "coverage_report": {
+          "coverage_percentage": 98.2
+        },
+        "traceability_report": {
+          "traceability_score": 100.0
+        }
+      }
+    };
+
+    // Tab Switching Logic
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      
+      document.querySelectorAll('nav button').forEach(el => el.classList.remove('active-tab'));
+      document.getElementById('btn-' + tabId).classList.add('active-tab');
+
+      // Update page title
+      const titles = {
+        'dashboard': 'Validation Dashboard',
+        'stories': 'Story Validation View',
+        'validators': 'Validator Results View',
+        'review': 'BA Review Screen',
+        'rework': 'Revision Package Viewer',
+        'audit': 'Pipeline Audit Trail'
+      };
+      document.getElementById('page-title').innerText = titles[tabId];
+    }
+
+    // Select Decision in BA Review
+    function selectDecision(decision) {
+      selectedDecision = decision;
+      document.getElementById('btn-dec-approve').classList.remove('bg-emerald-500/20');
+      document.getElementById('btn-dec-rework').classList.remove('bg-amber-500/20');
+      document.getElementById('btn-dec-reject').classList.remove('bg-rose-500/20');
+
+      if (decision === 'APPROVE') {
+        document.getElementById('btn-dec-approve').classList.add('bg-emerald-500/20');
+      } else if (decision === 'REWORK') {
+        document.getElementById('btn-dec-rework').classList.add('bg-amber-500/20');
+      } else if (decision === 'REJECT') {
+        document.getElementById('btn-dec-reject').classList.add('bg-rose-500/20');
+      }
+    }
+
+    // Load Job Data from API or Fallback
+    async function loadJobData() {
+      const jobId = document.getElementById('input-job-id').value;
+      try {
+        const response = await fetch(`/api/v1/validation/jobs/${jobId}/report`);
+        if (response.ok) {
+          const data = await response.json();
+          renderDashboardData(data);
+        } else {
+          // Fallback to mock data for demonstration
+          renderDashboardData(mockData);
+        }
+      } catch (e) {
+        renderDashboardData(mockData);
+      }
+    }
+
+    // Submit BA Review Decision
+    async function submitBAReview() {
+      const jobId = document.getElementById('input-job-id').value;
+      const comments = document.getElementById('review-comments').value;
+      const reviewer = document.getElementById('review-reviewer').value;
+
+      try {
+        const response = await fetch('/api/v1/validation/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            job_id: jobId,
+            decision: selectedDecision,
+            comments: comments,
+            reviewer: reviewer
+          })
+        });
+        if (response.ok) {
+          alert('BA Review Decision submitted successfully!');
+          addAuditLog(`BA Review submitted: ${selectedDecision}`, reviewer);
+        } else {
+          alert('Failed to submit BA review.');
+        }
+      } catch (e) {
+        alert('Submitted BA Review (local mock mode).');
+        addAuditLog(`BA Review submitted: ${selectedDecision}`, reviewer);
+      }
+    }
+
+    function addAuditLog(event, user) {
+      const list = document.getElementById('list-audit-logs');
+      const item = document.createElement('div');
+      item.className = 'glass-card p-4 flex justify-between items-center text-sm';
+      item.innerHTML = `
+        <div class="flex items-center gap-3">
+          <i class="fa-solid fa-circle-info text-indigo-400"></i>
+          <div>
+            <p class="font-semibold">${event}</p>
+            <p class="text-xs text-slate-400">Actor: ${user}</p>
+          </div>
+        </div>
+        <span class="text-xs text-slate-500">${new Date().toLocaleTimeString()}</span>
+      `;
+      list.prepend(item);
+    }
+
+    // Render Data to Dashboard Components
+    function renderDashboardData(data) {
+      document.getElementById('kpi-quality-score').innerText = (data.quality_score || 94.5) + '%';
+      document.getElementById('kpi-coverage').innerText = (data.reports?.coverage_report?.coverage_percentage || 98.2) + '%';
+      document.getElementById('kpi-critical').innerText = data.summary?.critical_count || 0;
+      document.getElementById('kpi-decision').innerText = data.decision || 'PASS';
+
+      // Render Story List
+      const tbody = document.getElementById('table-stories-body');
+      tbody.innerHTML = '';
+      const stories = [
+        { id: "ST-001", title: "User Authentication via OAuth2", mapping: "REQ-001", invest: "Valid" },
+        { id: "ST-002", title: "Generate PDF Requirement Summary", mapping: "REQ-002", invest: "Valid" }
+      ];
+      stories.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-800/40 hover:bg-slate-800/20';
+        tr.innerHTML = `
+          <td class="py-4 px-4 font-mono text-indigo-400">${s.id}</td>
+          <td class="py-4 px-4 font-semibold">${s.title}</td>
+          <td class="py-4 px-4 font-mono text-slate-400">${s.mapping}</td>
+          <td class="py-4 px-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${s.invest}</span></td>
+          <td class="py-4 px-4"><button class="text-indigo-400 hover:text-indigo-300"><i class="fa-solid fa-eye mr-1"></i> Inspect</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render Findings List
+      const list = document.getElementById('list-findings');
+      list.innerHTML = '';
+      (data.findings || []).forEach(f => {
+        const severityColors = {
+          'CRITICAL': 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+          'MAJOR': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+          'MINOR': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+          'INFO': 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+        };
+        const color = severityColors[f.severity] || severityColors['MINOR'];
+        const div = document.createElement('div');
+        div.className = `glass-card p-5 border-l-4 border-l-indigo-500 flex justify-between items-start`;
+        div.innerHTML = `
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${color}">${f.severity}</span>
+              <h4 class="font-bold text-slate-200">${f.title}</h4>
+            </div>
+            <p class="text-sm text-slate-400">${f.description}</p>
+            <p class="text-xs text-slate-500"><span class="font-semibold">Mitigation:</span> ${f.mitigation}</p>
+          </div>
+          <span class="text-xs font-mono text-slate-500">${f.validator_name}</span>
+        `;
+        list.appendChild(div);
+      });
+
+      // Render Rework / Preserve Sections
+      document.getElementById('rework-preserve-title').innerText = "Dashboard View / Actor: Lead BA";
+      document.getElementById('rework-preserve-traces').innerHTML = `
+        <li>REQ-001 (OAuth2 Authentication)</li>
+        <li>REQ-002 (PDF Exporter)</li>
+      `;
+      document.getElementById('rework-preserve-rules').innerHTML = `
+        <li>BR-01 (Passwords must be hashed)</li>
+        <li>BR-02 (PDF export must include audit logs)</li>
+      `;
+      document.getElementById('rework-modify-ac').innerHTML = `
+        <li>ST-002: Add acceptance criteria specifying PDF response time.</li>
+      `;
+      document.getElementById('rework-modify-coverage').innerHTML = `
+        <li>Coverage gap: Requirement REQ-003 is currently uncovered.</li>
+      `;
+
+      // Update Charts
+      updateCharts(data);
+    }
+
+    // Initialize & Update Charts
+    let radarChart = null;
+    let perfChart = null;
+
+    function updateCharts(data) {
+      const ctxRadar = document.getElementById('chart-radar').getContext('2d');
+      const ctxPerf = document.getElementById('chart-performance').getContext('2d');
+
+      if (radarChart) radarChart.destroy();
+      if (perfChart) perfChart.destroy();
+
+      radarChart = new Chart(ctxRadar, {
+        type: 'radar',
+        data: {
+          labels: ['INVEST', 'Coverage', 'Traceability', 'Semantic', 'Consistency', 'Grounding'],
+          datasets: [{
+            label: 'Quality Dimensions',
+            data: [85, 98.2, 100, 92, 95, 100],
+            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+            borderColor: 'rgba(99, 102, 241, 0.8)',
+            pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            r: {
+              angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' },
+              pointLabels: { color: '#94a3b8' },
+              ticks: { display: false }
+            }
+          }
+        }
+      });
+
+      perfChart = new Chart(ctxPerf, {
+        type: 'bar',
+        data: {
+          labels: ['Struc', 'Trace', 'Cover', 'Rules', 'Dep', 'AC', 'INVEST', 'Sem', 'Halluc', 'Consist', 'Dup', 'Tech'],
+          datasets: [{
+            label: 'Latency (ms)',
+            data: [12, 18, 15, 120, 22, 14, 250, 45, 280, 190, 85, 25],
+            backgroundColor: 'rgba(124, 58, 237, 0.6)',
+            borderColor: 'rgba(124, 58, 237, 0.9)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+            y: { grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+    }
+
+    // Initial Load
+    window.onload = () => {
+      loadJobData();
+      addAuditLog("Validation Engine initialized.", "SYSTEM");
+    };
+  </script>
+</body>
+</html>
