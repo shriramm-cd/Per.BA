@@ -76,11 +76,13 @@ class DomainDetectionModule:
                 except Exception:
                     confidence = 85
             confidence = max(0, min(100, confidence))
+            reasoning = result_json.get("reasoning", "").strip() or "Detected via LLM classification."
 
             return BusinessDomainDetection(
                 primary_domain=matched_primary,
                 secondary_domains=matched_secondaries,
-                confidence=confidence
+                confidence=confidence,
+                reasoning=reasoning
             )
 
         except Exception as e:
@@ -122,11 +124,14 @@ class DomainDetectionModule:
             return BusinessDomainDetection(
                 primary_domain=primary,
                 secondary_domains=secondaries,
-                confidence=80
+                confidence=80,
+                reasoning=f"Matched keywords for primary domain '{primary}'."
             )
             
+        default_domain = "HRMS" if "leave" in text_lower or "employee" in text_lower else "SaaS"
         return BusinessDomainDetection(
-            primary_domain="HRMS" if "leave" in text_lower or "employee" in text_lower else "SaaS",
+            primary_domain=default_domain,
             secondary_domains=[],
-            confidence=70
+            confidence=70,
+            reasoning=f"Defaulted to domain '{default_domain}' due to low keyword matches."
         )

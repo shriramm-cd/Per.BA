@@ -1,3 +1,4 @@
+import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from backend.agents.schemas import EpicFeaturePlannerOutput
@@ -251,8 +252,17 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
     Output ONLY the raw JSON object. Do not include any markdown formatting, code fences, or explanations."""
 
     # 2. Invoke LLM client
+    logger.info(
+        "Agent 2 prompt prepared requirements=%s prompt_chars=%s",
+        len(serializable_requirements),
+        len(prompt),
+    )
     llm = LLMClient()
-    response_json = await llm.generate_json(prompt=prompt, system_prompt=system_prompt)
+    try:
+        response_json = await llm.generate_json(prompt=prompt, system_prompt=system_prompt)
+    except Exception as exc:
+        logger.exception("Agent 2 LLM generation failed. requirements=%s prompt_chars=%s", len(serializable_requirements), len(prompt))
+        raise RuntimeError(f"Agent 2 LLM generation failed: {exc}") from exc
     
     # 3. Cast to Pydantic structure
     # Inject placeholders for required fields so initial Pydantic validation passes
@@ -276,9 +286,12 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
     try:
         output = EpicFeaturePlannerOutput.model_validate(response_json)
     except Exception as ve:
-        logger.error(f"Agent 2 Pydantic schema validation failed. Error: {str(ve)}")
-        logger.error(f"Response JSON causing validation failure:\n{json.dumps(response_json, indent=2)}")
-        raise ve
+        logger.exception(
+            "Agent 2 Pydantic schema validation failed. Error: %s\nPayload: %s",
+            str(ve),
+            json.dumps(response_json, indent=2)[:8000],
+        )
+        raise RuntimeError(f"Agent 2 response failed schema validation: {ve}") from ve
 
 
     

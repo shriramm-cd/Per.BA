@@ -1,6 +1,7 @@
 import os
 import time
 import asyncio
+import uuid
 from typing import Dict, Any, Optional, List
 from backend.validation_export.schemas import (
     ValidationEngineOutput, 
@@ -136,50 +137,53 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
     pipeline_run_id = input_data.get("pipeline_run_id")
     status_val = "COMPLETED"
 
-    async with AsyncSessionLocal() as session:
-        try:
-            db_result = ValidationResultDB(
-                id=str(uuid_id := os.urandom(16).hex()),
-                job_id=job_id,
-                quality_score=quality_score,
-                coverage_score=round(coverage_pct, 2),
-                traceability_score=round(100.0 - (len([f for f in findings if "TRACE-" in f.id]) * 15), 2),
-                decision=decision.value,
-                retry_count=retry_count,
-                validators_passed=len(validators_passed),
-                validators_failed=len(validators_failed),
-                critical_count=critical_count,
-                major_count=major_count,
-                minor_count=minor_count,
-                info_count=info_count,
-                version_number=version_number,
-                execution_id=execution_id,
-                pipeline_run_id=pipeline_run_id,
-                status=status_val
-            )
-            session.add(db_result)
-            
-            for f in findings:
-                db_finding = ValidationFindingDB(
-                    id=f.id,
-                    validation_result_id=uuid_id,
-                    validator_name=f.validator_name,
-                    title=f.title,
-                    description=f.description,
-                    severity=f.severity.value,
-                    field=f.field,
-                    mitigation=f.mitigation,
+    try:
+        async with AsyncSessionLocal() as session:
+            try:
+                db_result = ValidationResultDB(
+                    id=str(uuid_id := uuid.uuid4()),
+                    job_id=job_id,
+                    quality_score=quality_score,
+                    coverage_score=round(coverage_pct, 2),
+                    traceability_score=round(100.0 - (len([f for f in findings if "TRACE-" in f.id]) * 15), 2),
+                    decision=decision.value,
+                    retry_count=retry_count,
+                    validators_passed=len(validators_passed),
+                    validators_failed=len(validators_failed),
+                    critical_count=critical_count,
+                    major_count=major_count,
+                    minor_count=minor_count,
+                    info_count=info_count,
                     version_number=version_number,
                     execution_id=execution_id,
                     pipeline_run_id=pipeline_run_id,
                     status=status_val
                 )
-                session.add(db_finding)
+                session.add(db_result)
                 
-            await session.commit()
-            logger.info(f"Validation result and {len(findings)} findings saved to DB for job: {job_id}")
-        except Exception as e:
-            logger.error(f"Failed to persist validation results for job {job_id}: {str(e)}")
+                for f in findings:
+                    db_finding = ValidationFindingDB(
+                        id=str(uuid.uuid4()),
+                        validation_result_id=str(uuid_id),
+                        validator_name=f.validator_name,
+                        title=f.title,
+                        description=f.description,
+                        severity=f.severity.value,
+                        field=f.field,
+                        mitigation=f.mitigation,
+                        version_number=version_number,
+                        execution_id=execution_id,
+                        pipeline_run_id=pipeline_run_id,
+                        status=status_val
+                    )
+                    session.add(db_finding)
+                    
+                await session.commit()
+                logger.info(f"Validation result and {len(findings)} findings saved to DB for job: {job_id}")
+            except Exception as e:
+                logger.error(f"Failed to persist validation results for job {job_id}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Validation persistence layer unavailable for job {job_id}: {str(e)}")
 
     # Log completion audit event
     await AuditService.log_event(

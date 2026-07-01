@@ -183,6 +183,7 @@ class BusinessDomainDetection(BaseModel):
     primary_domain: str = Field(..., description="Primary business domain")
     secondary_domains: List[str] = Field(default_factory=list, description="Secondary business domains")
     confidence: int = Field(..., description="Confidence score (0-100)")
+    reasoning: str = Field(default="", description="Reasoning for domain detection")
 
 class Agent1RequirementIntelligenceOutput(BaseModel):
     """Agent 1 output conforming to exact specification"""

@@ -22,14 +22,14 @@ class RetryHandler:
 
         if confidence < 0.75:
             if retry_count >= max_retries:
-                logger.error(f"Execution halted. Confidence ({confidence}) below 0.75 after {retry_count} retries.")
-                raise MaxRetriesError(f"Failed to generate requirements with sufficient confidence after {retry_count} retries.")
-            
-            # Increment retry counter
-            new_retry_count = retry_count + 1
-            logger.warning(f"Confidence score {confidence} is below threshold (0.75). Incrementing retry counter to {new_retry_count}.")
-            state["retry_count"] = new_retry_count
-            state["status"] = "RETRY"
+                logger.warning(f"Confidence score {confidence} is below threshold after {retry_count} retries. Proceeding anyway.")
+                state["status"] = "VERIFIED"
+            else:
+                # Increment retry counter
+                new_retry_count = retry_count + 1
+                logger.warning(f"Confidence score {confidence} is below threshold (0.75). Incrementing retry counter to {new_retry_count}.")
+                state["retry_count"] = new_retry_count
+                state["status"] = "RETRY"
         else:
             state["status"] = "VERIFIED"
 

@@ -41,8 +41,8 @@ class Requirement(Base):
     __tablename__ = "requirements"
     __table_args__ = {'extend_existing': True}
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    job_id = Column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True)
+    job_id = Column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
     content = Column(Text, nullable=False)
     actors = Column(JSON, nullable=True)
     business_rules = Column(JSON, nullable=True)
@@ -69,8 +69,8 @@ class Story(Base):
     __tablename__ = "stories"
     __table_args__ = {'extend_existing': True}
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    job_id = Column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True)
+    job_id = Column(String(36), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
     epic = Column(String(255), nullable=False)
     feature = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)

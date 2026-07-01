@@ -965,7 +965,8 @@
                 // Set target path for preview
                 currentPreviewData = {
                     source_type: 'FILE',
-                    target_identifier: `backend/data/uploads/${result.job_id}_${file.name}`
+                    target_identifier: `backend/data/uploads/${result.job_id}_${file.name}`,
+                    job_id: result.job_id
                 };
                 previewIntake('FILE', currentPreviewData.target_identifier);
             }
@@ -974,21 +975,30 @@
         }
     }
 
+    function disableRunButtons(disabled) {
+        const btns = document.querySelectorAll('.btn, .tab-btn');
+        btns.forEach(btn => {
+            btn.disabled = disabled;
+            btn.style.opacity = disabled ? '0.5' : '1';
+            btn.style.pointerEvents = disabled ? 'none' : 'auto';
+        });
+    }
+
     // Preview Ingestion Gate
     async function previewIntake(sourceType, targetIdentifier) {
         let payload = { source_type: sourceType, target_identifier: targetIdentifier };
         
         if (sourceType === 'PASTE') {
             payload.source_type = 'FILE';
-            // Save pasted text to a temp file
+            // Save pasted text to a temp file only, do not start pipeline
             const pasteText = document.getElementById('brdInput').value;
-            const res = await fetch('/run-from-text', {
+            const res = await fetch('/save-text-only', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: pasteText })
             });
             const data = await res.json();
-            payload.target_identifier = `backend/data/uploads/${data.job_id}_pasted_brd.txt`;
+            payload.target_identifier = data.file_path;
             payload.source_type = 'FILE';
         } else if (sourceType === 'JIRA') {
             const story = document.getElementById('jiraStory').value;
@@ -1037,6 +1047,15 @@
         
         addLog('Initiating multi-agent pipeline...', 'info');
         updateStep('ingest', 'active', 'Running summary...');
+        disableRunButtons(true);
+
+        // If pipeline is already running on the backend (e.g. from File Upload)
+        if (currentPreviewData.job_id) {
+            activeJobId = currentPreviewData.job_id;
+            addLog(`Pipeline job is already executing in the background. Job ID: ${activeJobId}`, 'success');
+            startPolling(activeJobId);
+            return;
+        }
 
         try {
             const endpoint = currentPreviewData.source_type === 'FILE' ? '/run-from-text' : '/connectors/import';
@@ -1062,13 +1081,13 @@
             startPolling(activeJobId);
         } catch (error) {
             addLog(`Failed to start pipeline: ${error.message}`, 'error');
+            disableRunButtons(false);
         }
     }
 
     function startPolling(jobId) {
         let processedNodes = new Set();
-        updateStep('ingest', 'completed', 'Completed');
-        updateStep('agent1', 'active', 'Extracting...');
+        updateStep('ingest', 'active', 'Starting...');
 
         pollInterval = setInterval(async () => {
             const response = await fetch(`/pipeline/debug/${jobId}`, {
@@ -1080,6 +1099,7 @@
             
             if (debugState.latest_status === 'FAILED') {
                 clearInterval(pollInterval);
+                disableRunButtons(false);
                 addLog(`Pipeline execution failed: ${debugState.error_message || 'Unknown error'}`, 'error');
                 document.querySelectorAll('.step.active').forEach(step => {
                     step.className = 'step failed';
@@ -1093,44 +1113,90 @@
             const nodes = debugState.nodes || [];
             
             for (const node of nodes) {
-                if (node.status !== 'COMPLETED') continue;
-                if (processedNodes.has(node.node)) continue;
+                const stepKey = `${node.node}-${node.status}`;
+                if (processedNodes.has(stepKey)) continue;
+                processedNodes.add(stepKey);
                 
-                processedNodes.add(node.node);
-                
-                if (node.node === 'ingest') {
-                    addLog('Ingestion layer completed. Extracted summary.', 'success');
-                }
-                if (node.node === 'agent1') {
-                    addLog('Agent 1 completed. Requirements intelligence compiled.', 'success');
-                    updateStep('agent1', 'completed', 'Completed');
-                    updateStep('agent2', 'active', 'Planning...');
-                }
-                if (node.node === 'agent2') {
-                    addLog('Agent 2 completed. Epics and features planned.', 'success');
-                    updateStep('agent2', 'completed', 'Completed');
-                    updateStep('agent3', 'active', 'Generating...');
-                }
-                if (node.node === 'agent3') {
-                    addLog('Agent 3 completed. Generated Draft Story Zest.', 'success');
-                    // Render Draft Zest info
-                    const out = node.output;
-                    if (out.story_contexts) {
-                        document.getElementById('draftGoal').innerText = "Automate and streamline leave lifecycle management.";
-                        document.getElementById('draftScope').innerText = "Covers leave submissions, manager approval workflows, and automated balance accruals.";
-                        document.getElementById('draftFeatures').innerText = "Leave Request Form, Manager Approval Console, Balances Page";
-                        document.getElementById('draftStatStories').innerText = out.user_stories?.length || 10;
-                        document.getElementById('draftStatEpics').innerText = "1";
-                        document.getElementById('draftStatFeatures').innerText = "3";
-                        document.getElementById('orchestratorInspectorCard').style.display = 'block';
+                if (node.status === 'STARTED') {
+                    if (node.node === 'ingest') {
+                        addLog('Ingestion layer started. Normalizing requirement input...', 'info');
+                        updateStep('ingest', 'active', 'Ingesting...');
                     }
-                }
-                if (node.node === 'agent4') {
-                    addLog('Agent 4 completed. Running Validation Dashboard...', 'success');
-                    updateStep('agent3', 'completed', 'Completed');
+                    if (node.node === 'agent1') {
+                        addLog('Agent 1 (Requirement Intelligence) started. Analyzing requirements...', 'info');
+                        updateStep('agent1', 'active', 'Analyzing...');
+                    }
+                    if (node.node === 'agent2') {
+                        addLog('Agent 2 (Epic & Feature Planner) started. Mapping epics and features...', 'info');
+                        updateStep('agent2', 'active', 'Planning...');
+                    }
+                    if (node.node === 'agent3') {
+                        addLog('Agent 3 (User Story Generator) started. Generating Agile user stories...', 'info');
+                        updateStep('agent3', 'active', 'Generating...');
+                    }
+                    if (node.node === 'agent4') {
+                        addLog('Agent 4 (Validation Engine) started. Executing 12-validator checklist...', 'info');
+                        updateStep('agent3', 'active', 'Validating...');
+                    }
+                    if (node.node === 'retry_node') {
+                        addLog('Low confidence detected. Triggering self-correction retry...', 'warning');
+                    }
+                    if (node.node === 'automatic_revision_node') {
+                        addLog('Rework engine triggered. Automatically compiling revision package...', 'warning');
+                    }
+                } else if (node.status === 'COMPLETED') {
+                    if (node.node === 'ingest') {
+                        addLog('Ingestion layer completed. Extracted summary.', 'success');
+                        updateStep('ingest', 'completed', 'Completed');
+                    }
+                    if (node.node === 'agent1') {
+                        addLog('Agent 1 completed. Requirements intelligence compiled.', 'success');
+                        updateStep('agent1', 'completed', 'Completed');
+                    }
+                    if (node.node === 'agent2') {
+                        addLog('Agent 2 completed. Epics and features planned.', 'success');
+                        updateStep('agent2', 'completed', 'Completed');
+                    }
+                    if (node.node === 'agent3') {
+                        addLog('Agent 3 completed. Generated Draft Story Zest.', 'success');
+                        const out = node.output;
+                        if (out.story_contexts) {
+                            document.getElementById('draftGoal').innerText = "Automate and streamline leave lifecycle management.";
+                            document.getElementById('draftScope').innerText = "Covers leave submissions, manager approval workflows, and automated balance accruals.";
+                            document.getElementById('draftFeatures').innerText = "Leave Request Form, Manager Approval Console, Balances Page";
+                            document.getElementById('draftStatStories').innerText = out.user_stories?.length || 10;
+                            document.getElementById('draftStatEpics').innerText = "1";
+                            document.getElementById('draftStatFeatures').innerText = "3";
+                            document.getElementById('orchestratorInspectorCard').style.display = 'block';
+                        }
+                    }
+                    if (node.node === 'agent4') {
+                        addLog('Agent 4 completed. Running Validation Dashboard...', 'success');
+                        updateStep('agent3', 'completed', 'Completed');
+                        clearInterval(pollInterval);
+                        disableRunButtons(false);
+                        loadValidationDashboard(jobId);
+                    }
+                    if (node.node === 'fail_node') {
+                        addLog('Pipeline failed. Terminating execution.', 'error');
+                        clearInterval(pollInterval);
+                        disableRunButtons(false);
+                    }
+                    if (node.node === 'human_review_node') {
+                        addLog('Pipeline halted. Manual BA resolution required.', 'warning');
+                        clearInterval(pollInterval);
+                        disableRunButtons(false);
+                    }
+                } else if (node.status === 'FAILED') {
+                    addLog(`Node ${node.node} failed: ${node.message || 'Error occurred.'}`, 'error');
                     clearInterval(pollInterval);
-                    
-                    loadValidationDashboard(jobId);
+                    disableRunButtons(false);
+                    document.querySelectorAll('.step.active').forEach(step => {
+                        step.className = 'step failed';
+                        const subId = step.id.replace('step-', 'sub-');
+                        const subEl = document.getElementById(subId);
+                        if (subEl) subEl.innerText = 'Failed';
+                    });
                 }
             }
         }, 1500);

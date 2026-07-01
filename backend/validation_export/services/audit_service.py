@@ -17,14 +17,17 @@ class AuditService:
         payload = payload or {}
         logger.info(f"[AUDIT EVENT] Job: {job_id} | Type: {event_type} | Details: {payload}")
         
-        async with AsyncSessionLocal() as session:
-            try:
-                event = AuditEventDB(
-                    job_id=job_id,
-                    event_type=event_type,
-                    payload=payload
-                )
-                session.add(event)
-                await session.commit()
-            except Exception as e:
-                logger.error(f"Failed to persist audit event for job {job_id}: {str(e)}")
+        try:
+            async with AsyncSessionLocal() as session:
+                try:
+                    event = AuditEventDB(
+                        job_id=job_id,
+                        event_type=event_type,
+                        payload=payload
+                    )
+                    session.add(event)
+                    await session.commit()
+                except Exception as e:
+                    logger.error(f"Failed to persist audit event for job {job_id}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Audit persistence layer unavailable for job {job_id}: {str(e)}")

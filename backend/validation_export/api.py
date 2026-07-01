@@ -126,9 +126,10 @@ async def validate_story_package(
         session.add(db_result)
         
         # Add findings
+        import uuid
         for f in findings:
             db_finding = ValidationFindingDB(
-                id=f.id,
+                id=str(uuid.uuid4()),
                 validation_result_id=uuid_id,
                 validator_name=f.validator_name,
                 title=f.title,

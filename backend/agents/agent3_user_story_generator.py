@@ -203,83 +203,88 @@ class UserStoryGenerator:
             if story_id:
                 approved_map[story_id] = s
                 
-        generated: list[GeneratedUserStory] = []
-        for story_context in story_contexts:
-            story_id = story_context.story_id
-            
-            if story_id in rev_map:
-                rp = rev_map[story_id]
-                self.logger.info(f"Regenerating rejected story {story_id} using revision package.")
+        # Parallel generation using asyncio.Semaphore to limit concurrent API calls
+        import asyncio
+        sem = asyncio.Semaphore(10)
+        
+        async def process_context(story_context):
+            async with sem:
+                story_id = story_context.story_id
                 
-                prompt = self._build_rework_prompt(story_context, rp)
-                system_prompt = (
-                    "You are a senior Business Analyst and Product Owner. "
-                    "Rework the existing Agile user story based on the provided revision objectives, preserving the required sections."
-                )
-                response_json = await self.llm_client.generate_json(prompt=prompt, system_prompt=system_prompt)
-                
-                generated_story = self.parse_response(response_json, story_context)
-                generated_story.story_id = story_id
-                generated_story.version = int(rp.get("current_story", {}).get("version", 1)) + 1
-                generated.append(generated_story)
-                
-            elif story_id in approved_map:
-                self.logger.info(f"Preserving approved story {story_id} as-is.")
-                s = approved_map[story_id]
-                
-                from backend.agents.schemas import Traceability, UserStoryContent, Metadata
-                
-                story_text = s.get("user_story", "")
-                goal = ""
-                benefit = ""
-                if "I want" in story_text and "so that" in story_text:
-                    try:
-                        goal = story_text.split("so that")[0].split("I want")[1].strip()
-                        benefit = story_text.split("so that")[1].strip()
-                    except Exception:
-                        pass
-                        
-                ac_list = []
-                for ac in s.get("acceptance_criteria", []):
-                    if isinstance(ac, dict):
-                        ac_list.append(ac.get("statement", ""))
-                    else:
-                        ac_list.append(str(ac))
-                        
-                gen_story = GeneratedUserStory(
-                    story_id=story_id,
-                    traceability=Traceability(
-                        requirement_id=story_context.requirement_id,
-                        epic_id=self._safe_id(story_context.epic, "id"),
-                        feature_id=self._safe_id(story_context.feature, "id")
-                    ),
-                    epic=s.get("epic", ""),
-                    feature=s.get("feature", ""),
-                    user_story=UserStoryContent(
-                        actor=s.get("actor") or "User",
-                        goal=goal,
-                        benefit=benefit
-                    ),
-                    acceptance_criteria=ac_list,
-                    definition_of_done=s.get("definition_of_done") or [],
-                    summary=s.get("title", ""),
-                    priority=s.get("priority", "Medium"),
-                    version=int(s.get("version", 1)),
-                    metadata=Metadata(
-                        generated_by="Agent-3-Preserved",
-                        generated_timestamp=datetime.now(timezone.utc).isoformat(),
-                        domain=s.get("epic", ""),
-                        version="1.0",
-                        confidence_score=1.0,
-                        source_story_count=1
+                if story_id in rev_map:
+                    rp = rev_map[story_id]
+                    self.logger.info(f"Regenerating rejected story {story_id} using revision package.")
+                    
+                    prompt = self._build_rework_prompt(story_context, rp)
+                    system_prompt = (
+                        "You are a senior Business Analyst and Product Owner. "
+                        "Rework the existing Agile user story based on the provided revision objectives, preserving the required sections."
                     )
-                )
-                generated.append(gen_story)
-            else:
-                generated_story = await self.generate_story(story_context)
-                generated.append(generated_story)
-                
-        return generated
+                    response_json = await self.llm_client.generate_json(prompt=prompt, system_prompt=system_prompt)
+                    
+                    generated_story = self.parse_response(response_json, story_context)
+                    generated_story.story_id = story_id
+                    generated_story.version = int(rp.get("current_story", {}).get("version", 1)) + 1
+                    return generated_story
+                    
+                elif story_id in approved_map:
+                    self.logger.info(f"Preserving approved story {story_id} as-is.")
+                    s = approved_map[story_id]
+                    
+                    from backend.agents.schemas import Traceability, UserStoryContent, Metadata
+                    
+                    story_text = s.get("user_story", "")
+                    goal = ""
+                    benefit = ""
+                    if "I want" in story_text and "so that" in story_text:
+                        try:
+                            goal = story_text.split("so that")[0].split("I want")[1].strip()
+                            benefit = story_text.split("so that")[1].strip()
+                        except Exception:
+                            pass
+                            
+                    ac_list = []
+                    for ac in s.get("acceptance_criteria", []):
+                        if isinstance(ac, dict):
+                            ac_list.append(ac.get("statement", ""))
+                        else:
+                            ac_list.append(str(ac))
+                            
+                    gen_story = GeneratedUserStory(
+                        story_id=story_id,
+                        traceability=Traceability(
+                            requirement_id=story_context.requirement_id,
+                            epic_id=self._safe_id(story_context.epic, "id"),
+                            feature_id=self._safe_id(story_context.feature, "id")
+                        ),
+                        epic=s.get("epic", ""),
+                        feature=s.get("feature", ""),
+                        user_story=UserStoryContent(
+                            actor=s.get("actor") or "User",
+                            goal=goal,
+                            benefit=benefit
+                        ),
+                        acceptance_criteria=ac_list,
+                        definition_of_done=s.get("definition_of_done") or [],
+                        summary=s.get("title", ""),
+                        priority=s.get("priority", "Medium"),
+                        version=int(s.get("version", 1)),
+                        metadata=Metadata(
+                            generated_by="Agent-3-Preserved",
+                            generated_timestamp=datetime.now(timezone.utc).isoformat(),
+                            domain=s.get("epic", ""),
+                            version="1.0",
+                            confidence_score=1.0,
+                            source_story_count=1
+                        )
+                    )
+                    return gen_story
+                else:
+                    return await self.generate_story(story_context)
+
+        tasks = [process_context(story_context) for story_context in story_contexts]
+        generated = await asyncio.gather(*tasks)
+        return list(generated)
 
     def _normalize_value(self, value: Any, key: str) -> str:
         """Normalizes a nested context value into a readable string."""

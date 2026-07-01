@@ -1,0 +1,341 @@
+Business Requirements Document
+Customer Loyalty & Rewards Platform
+Document Version:
+1.0
+Date:
+June 30, 2026
+Prepared By:
+Business Analysis Team
+Department:
+Digital Transformation Office
+Status:
+– For Review
+Classification:
+Internal Use Only
+
+Table of Contents
+1. Document Control & Revision History
+2. Executive Summary
+3. Business Objectives
+4. Project Scope
+5. Stakeholders
+6. Current State (As-Is) Analysis
+7. Future State (To-Be) Vision
+8. Business Requirements
+9. Functional Requirements
+10. Non-Functional Requirements
+11. Assumptions, Constraints & Dependencies
+12. Risks & Mitigation
+13. Success Metrics (KPIs)
+14. Timeline & Milestones
+15. Budget Overview
+16. Approval & Sign-off
+
+1. Document Control & Revision History
+This section tracks changes to this Business Requirements Document (BRD) over its lifecycle. Any
+modification to scope, requirements, or assumptions must be logged here with an updated version
+number.
+Version
+Date
+Author
+Description of Change
+0.1
+May 10, 2026
+Initial created
+0.5
+May 28, 2026
+Added functional requirements section
+0.8
+June 12, 2026
+Scope revised after stakeholder workshop
+1.0
+June 30, 2026
+Finalized for review and sign-off
+Distribution List
+VP of Customer Experience
+Director of Marketing
+Data Privacy Officer
+Customer Support Manager
+
+2. Executive Summary
+The organization currently lacks a unified loyalty and rewards program capable of consolidating customer
+engagement across web, mobile, and in-store channels. Existing point-tracking mechanisms are
+fragmented across three legacy systems, leading to inconsistent customer experiences, manual
+reconciliation effort, and limited visibility into customer lifetime value.
+This Business Requirements Document defines the business need, scope, and detailed requirements for a
+new Customer Loyalty & Rewards Platform ("the Platform") that will replace existing systems with a single,
+scalable solution. The Platform will enable real-time point accrual and redemption, tiered membership
+benefits, personalized offers, and integration with the existing CRM and e-commerce systems.
+The initiative is sponsored by the Customer Experience division and is expected to deliver measurable
+improvements in customer retention, average order value, and program enrollment within twelve months of
+launch. This document is intended for review and approval by key business and technical stakeholders
+prior to the commencement of solution design.
+
+3. Business Objectives
+The Platform is expected to support the following strategic business objectives, each of which ties directly
+to broader company goals around customer retention and digital engagement.
+#
+Objective
+Business Driver
+BO-1
+Unify loyalty data across all customer touchpoints
+Fragmented legacy systems
+BO-2
+Increase repeat purchase rate by 15% within 12 months
+Declining retention metrics
+BO-3
+Reduce manual point reconciliation effort by 80%
+High operational overhead
+BO-4
+Enable personalized, tier-based rewards
+Competitive differentiation
+BO-5
+Provide real-time loyalty analytics to marketing
+Limited current visibility
+
+4. Project Scope
+4.1 In Scope
+Design and implementation of a centralized loyalty points engine (accrual and redemption rules)
+Tiered membership structure (Bronze, Silver, Gold, Platinum) with configurable benefit rules
+Integration with existing CRM, e-commerce platform, and point-of-sale (POS) systems
+Customer-facing loyalty dashboard within the web and mobile applications
+Administrative console for marketing teams to configure campaigns and promotions
+Migration of historical loyalty data from the three legacy systems
+Reporting and analytics module for loyalty program performance
+4.2 Out of Scope
+Co-branded credit card program integration (planned for a future phase)
+Loyalty partnerships with third-party external merchants
+Redesign of the core e-commerce checkout experience
+International currency conversion for cross-border loyalty redemption
+
+5. Stakeholders
+The following individuals and groups have been identified as key stakeholders for this initiative, each with
+distinct interests and responsibilities throughout the project lifecycle.
+Role
+Responsibility
+Involvement
+Overall accountability and funding approval
+VP, Customer Experience
+Business owner; defines program rules
+Director of Marketing
+Campaign configuration and promotions strategy
+Technical feasibility and architecture
+Data Privacy Officer
+Compliance with data protection regulations
+Customer Support Manager
+Operational readiness and training
+Budget tracking and ROI validation
+End Customers
+Primary users of loyalty features
+Indirect
+
+6. Current State (As-Is) Analysis
+The organization currently operates three disconnected loyalty mechanisms: an in-store punch-card style
+system managed at the POS level, a web-based points system tied to the e-commerce platform, and a
+manual spreadsheet-based process used by the call center to issue goodwill credits.
+This fragmentation creates several pain points. Customers are unable to view a consolidated balance
+across channels. Marketing teams cannot segment customers based on a unified lifetime value score.
+Finance is unable to accurately forecast the loyalty liability on the balance sheet due to inconsistent point
+valuation across systems. Additionally, customer support agents report an average of 45 minutes per week
+per agent spent manually reconciling point discrepancies.
+Key Pain Points Summary
+Pain Point
+Impact
+No unified customer view
+Poor personalization, lost upsell opportunities
+Manual reconciliation
+High operational cost, error-prone
+Inconsistent point valuation
+Inaccurate financial liability reporting
+No real-time redemption
+Customer frustration, abandoned redemptions
+
+7. Future State (To-Be) Vision
+In the future state, customers will enroll once and have their loyalty status and points balance reflected
+consistently across web, mobile, and in-store channels in real time. A single source of truth for loyalty data
+will allow marketing to build targeted campaigns based on tier, spend behavior, and engagement history.
+Customers will be able to track progress toward the next membership tier, view personalized reward
+recommendations, and redeem points instantly at checkout or in-store without delay. Internally, finance will
+have access to a real-time dashboard reflecting outstanding point liability, and customer support will be
+able to resolve loyalty-related inquiries within a single console rather than three.
+The architecture will be built on a scalable, API-first foundation, allowing future expansion into co-branded
+partnerships and additional redemption channels without significant rework.
+
+8. Business Requirements
+Business requirements describe the high-level capabilities the Platform must deliver to satisfy the
+objectives outlined in Section 3. Each is assigned a unique identifier for traceability.
+ID
+Requirement
+Priority
+BR-01
+Consolidate loyalty data from all legacy systems into one platform
+BR-02
+Support configurable, rules-based point accrual and expiration
+BR-03
+Support a minimum of four membership tiers with distinct benefits
+BR-04
+Enable real-time point redemption at checkout and in-store POS
+BR-05
+Provide self-service customer dashboard for points and rewards
+BR-06
+Provide marketing campaign configuration without engineering support
+BR-07
+Support referral-based bonus point awards
+BR-08
+Provide exportable reporting for finance and marketing teams
+BR-09
+Support customer notifications for tier changes and expiring points
+BR-10
+Allow customer support agents to manually adjust point balances with audit trail
+
+9. Functional Requirements
+9.1 Enrollment & Account Management
+Customers shall be able to enroll in the loyalty program via web, mobile app, or in-store at the point of
+sale.
+The system shall prevent duplicate enrollments using email and phone number validation.
+Customers shall be able to link multiple purchase channels to a single loyalty account.
+9.2 Points Accrual & Redemption
+The system shall calculate points earned based on configurable rules (e.g., 1 point per $1 spent).
+Points shall be visible in the customer account within 5 minutes of transaction completion.
+Customers shall be able to redeem points for discounts, free products, or experiential rewards.
+The system shall support partial point redemption combined with other payment methods.
+9.3 Tier Management
+The system shall automatically upgrade or downgrade customer tier status based on rolling 12-month
+spend.
+Customers shall receive a notification when they move between tiers.
+Each tier shall support a distinct set of configurable benefits managed by marketing administrators.
+9.4 Administration & Reporting
+Marketing administrators shall be able to create and schedule promotional point campaigns.
+The system shall provide dashboards showing enrollment trends, redemption rates, and point liability.
+All manual point adjustments shall be logged with user ID, timestamp, and reason code.
+
+10. Non-Functional Requirements
+Category
+Requirement
+Performance
+Point balance updates must reflect within 5 minutes of transaction; dashboard load time under 2 seconds
+Scalability
+System must support up to 5 million active loyalty members with peak concurrent load during promotional events
+Availability
+99.9% uptime for customer-facing services, excluding planned maintenance windows
+Security
+All customer data encrypted at rest and in transit; role-based access control for admin console
+Compliance
+Must comply with applicable data protection regulations (e.g., GDPR, CCPA) for customer data handling
+Usability
+Customer dashboard must be accessible (WCAG 2.1 AA) and responsive across mobile and desktop
+Auditability
+All point transactions and manual adjustments must be retained for a minimum of 7 years
+
+11. Assumptions, Constraints & Dependencies
+11.1 Assumptions
+Legacy system vendors will provide data export access for migration purposes.
+Existing CRM and POS systems expose APIs suitable for real-time integration.
+Marketing team will be available for workshops during the requirements refinement phase.
+11.2 Constraints
+The project must launch before the start of the next holiday shopping season.
+Budget is capped at the amount approved in the Q3 capital expenditure plan.
+Legacy POS hardware cannot be replaced as part of this initiative.
+11.3 Dependencies
+Completion of the CRM data model upgrade currently in progress under a separate initiative.
+Availability of the integration team for POS middleware connectivity.
+Legal and compliance sign-off on the updated loyalty program terms and conditions.
+
+12. Risks & Mitigation
+Risk
+Likelihood
+Impact
+Mitigation
+Legacy data quality issues delay migration
+Conduct early data audit and cleansing sprint
+POS integration complexity exceeds estimate
+Engage vendor early; build proof-of-concept
+Customer adoption slower than projected
+Low
+Launch incentive campaign at rollout
+Scope creep from additional channel requests
+Enforce change control process
+Regulatory requirements change mid-project
+Low
+Maintain ongoing legal review checkpoint
+
+13. Success Metrics (KPIs)
+The success of the Platform will be measured against the following key performance indicators, tracked
+quarterly post-launch for a period of 18 months.
+KPI
+Baseline
+Target (12 months post-launch)
+Loyalty program enrollment rate
+32%
+50%
+Repeat purchase rate
+21%
+36%
+Average order value (loyalty members)
+$58
+$68
+Manual reconciliation hours per month
+180 hrs
+< 35 hrs
+Customer satisfaction (loyalty experience)
+3.4 / 5
+4.3 / 5
+
+14. Timeline & Milestones
+Phase
+Milestone
+Target Date
+Discovery
+BRD sign-off
+July 2026
+Design
+Solution architecture & UX design approved
+August 2026
+Build
+Core points engine development complete
+October 2026
+Build
+POS and CRM integration complete
+November 2026
+Migration
+Legacy data migration complete
+November 2026
+Testing
+UAT sign-off
+December 2026
+Launch
+Phased rollout begins
+January 2027
+Stabilization
+Full rollout complete; hypercare ends
+March 2027
+
+15. Budget Overview
+The table below provides a high-level, indicative budget breakdown for the initiative. Final costs are subject
+to vendor quotes obtained during the design phase.
+Category
+Estimated Cost
+Platform licensing / software
+$210,000
+Integration & development effort
+$340,000
+Data migration
+$65,000
+Testing & QA
+$50,000
+Training & change management
+$35,000
+Contingency (10%)
+$70,000
+Total Estimated Budget
+$770,000
+
+16. Approval & Sign-off
+By signing below, stakeholders confirm that they have reviewed this Business Requirements Document
+and agree that it accurately reflects the business needs and scope for the Customer Loyalty & Rewards
+Platform initiative.
+Name
+Role
+Signature
+Date
+VP, Customer Experience

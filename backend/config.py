@@ -12,7 +12,12 @@ class Settings(BaseSettings):
     PORT: int = Field(default=8000)
     
     GROQ_API_KEY: str = Field(default="")
+    GROQ_API_KEY_PRIMARY: str = Field(default="")
+    GROQ_API_KEY_FALLBACK: str = Field(default="")
+    OPENROUTER_API_KEY: str = Field(default="")
     GEMINI_API_KEY: str = Field(default="")
+    GEMINI_API_KEY_PRIMARY: str = Field(default="")
+    GEMINI_API_KEY_FALLBACK: str = Field(default="")
     
     S3_ENDPOINT_URL: str = Field(default="http://localhost:9000")
     S3_ACCESS_KEY: str = Field(default="minioadmin")

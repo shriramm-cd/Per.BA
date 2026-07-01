@@ -24,6 +24,7 @@ from backend.validation_export.db_models import (
 from backend.api.routes import ingest, pipeline, stories, audit, connectors
 from backend.validation_export.api import router as validation_router
 from backend.api.middleware import RequestLoggingMiddleware
+from backend.shared.llm_client import LLMClient
 from backend.shared.logger import get_logger
 
 logger = get_logger(__name__)
@@ -67,6 +68,13 @@ async def on_startup():
     except Exception as e:
         logger.critical(f"Failed to initialize database tables: {str(e)}")
 
+    try:
+        llm_client = LLMClient()
+        validation_status = await llm_client.validate_provider_keys()
+        logger.info("LLM provider validation status: %s", validation_status)
+    except Exception as e:
+        logger.warning("LLM provider validation failed during startup: %s", e)
+
 @app.get("/", response_class=HTMLResponse, tags=["Root"])
 def root():
     """
@@ -76,6 +84,30 @@ def root():
     with open(client_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
+
+@app.post("/save-text-only", tags=["Testing"])
+async def save_text_only(
+    payload: dict = Body(...),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Saves pasted text to a temporary file and returns its path.
+    Does NOT trigger any pipeline execution.
+    """
+    text_content = payload.get("text", "")
+    import tempfile
+    import uuid
+    job_id = str(uuid.uuid4())
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    upload_dir = os.path.join(base_dir, "data", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    temp_file_path = os.path.join(upload_dir, f"{job_id}_pasted_brd.txt")
+    with open(temp_file_path, "w", encoding="utf-8") as f:
+        f.write(text_content)
+    return {
+        "job_id": job_id,
+        "file_path": temp_file_path
+    }
 
 @app.post("/run-from-text", tags=["Testing"])
 async def run_from_text(

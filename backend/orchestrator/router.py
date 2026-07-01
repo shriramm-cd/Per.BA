@@ -17,8 +17,8 @@ def route_after_agent1(state: GraphState) -> str:
             logger.info(f"Routing logic: Low confidence ({confidence}). Directing to retry loop.")
             return "retry_node"
         else:
-            logger.error("Routing logic: Low confidence, retry limit exceeded. Routing to failure.")
-            return "fail_node"
+            logger.warning("Routing logic: Low confidence, retry limit reached. Proceeding to Agent 2 with warning.")
+            return "agent2_node"
     
     logger.info("Routing logic: Confidence acceptable. Proceeding to Agent 2.")
     return "agent2_node"

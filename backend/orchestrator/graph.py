@@ -49,6 +49,12 @@ def _append_debug_entry(job_id: str, node_name: str, status: str, output: Dict[s
         pipeline_debug_state[job_id]["error_message"] = message
 
 def reset_pipeline_debug_state(job_id: str) -> None:
+    try:
+        from backend.shared.llm_client import LLMClient
+        LLMClient.reset_circuit_breaker()
+    except Exception as e:
+        logger.error(f"Failed to reset LLM client circuit breakers: {e}")
+
     pipeline_debug_state[job_id] = {
         "job_id": job_id,
         "nodes": [],
