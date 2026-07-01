@@ -22,15 +22,9 @@ logger = get_logger("ingestion.docling_loader")
 
 # ── Docling import (lazy) ──────────────────────────────────────────────────────
 
-try:
-    from docling.document_converter import DocumentConverter
-    from docling.exceptions import ConversionError  # graceful if missing
-    _DOCLING_AVAILABLE = True
-except Exception as e:
-    _DOCLING_AVAILABLE = False
-    log_warning(
-        f"Docling is not available (failed to import/load: {e}). File/URL extraction will use text fallback only.",
-    )
+import importlib.util
+_DOCLING_AVAILABLE = importlib.util.find_spec("docling") is not None
+
 
 
 
@@ -38,6 +32,7 @@ except Exception as e:
 
 def _get_converter() -> "DocumentConverter":
     """Return a lazily-instantiated DocumentConverter (cached per process)."""
+    global _DOCLING_AVAILABLE
     if not _DOCLING_AVAILABLE:
         raise RuntimeError(
             "docling package is not installed. Run: pip install docling"
@@ -45,7 +40,15 @@ def _get_converter() -> "DocumentConverter":
     # Re-use a module-level singleton to avoid reloading models on every call.
     if _get_converter._instance is None:
         log_info("Initialising Docling DocumentConverter (models may download on first run).")
-        _get_converter._instance = DocumentConverter()
+        try:
+            from docling.document_converter import DocumentConverter
+            _get_converter._instance = DocumentConverter()
+        except Exception as e:
+            _DOCLING_AVAILABLE = False
+            log_error(f"Failed to import/initialize Docling DocumentConverter: {e}")
+            raise RuntimeError(
+                f"docling package is not working properly: {e}"
+            ) from e
     return _get_converter._instance
 
 

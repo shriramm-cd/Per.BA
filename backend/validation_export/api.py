@@ -417,7 +417,8 @@ async def submit_ba_review(
     user_info: Dict[str, Any] = Depends(SecurityService.authenticate)
 ):
     """
-    Saves a BA manual review decision and logs audit events.
+    Saves a BA manual review decision, generates Final Story Zest on approval,
+    and logs audit events.
     """
     SecurityService.authorize(user_info, ["BA", "ADMIN"])
     
@@ -430,31 +431,108 @@ async def submit_ba_review(
     if not job_id or not decision:
         raise HTTPException(status_code=400, detail="Missing job_id or decision")
 
-    # Persist review
     import uuid
+    from backend.db.models import Job, Story, StoryZest
+    from backend.validation_export.db_models import BAReviewDB, ValidatedStoryPackageDB
+    from sqlalchemy import select, delete
+
     async with AsyncSessionLocal() as session:
+        # Get Job
+        stmt_job = select(Job).where(Job.id == job_id)
+        res_job = await session.execute(stmt_job)
+        job = res_job.scalar_one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        version_number = job.version_number
+        execution_id = job.execution_id
+        pipeline_run_id = job.pipeline_run_id
+
+        # Save BAReviewDB record
         db_review = BAReviewDB(
             id=str(uuid.uuid4()),
             job_id=job_id,
             reviewer=reviewer,
             decision=decision,
             comments=comments,
-            edits=edits
+            edits=edits,
+            version_number=version_number,
+            execution_id=execution_id,
+            pipeline_run_id=pipeline_run_id,
+            status="COMPLETED"
         )
         session.add(db_review)
-        
-        from backend.db.models import Job
-        from sqlalchemy import select
-        stmt_job = select(Job).where(Job.id == job_id)
-        res_job = await session.execute(stmt_job)
-        job = res_job.scalar_one_or_none()
-        if job:
-            if decision == "APPROVE":
-                job.status = "COMPLETED"
-            elif decision == "REWORK":
-                job.status = "RUNNING"
-            else:
-                job.status = "FAILED"
+
+        if decision == "APPROVE":
+            job.status = "COMPLETED"
+            
+            # Fetch stories
+            stmt_stories = select(Story).where(Story.job_id == job_id)
+            res_stories = await session.execute(stmt_stories)
+            stories = res_stories.scalars().all()
+            stories_list = [
+                {
+                    "id": s.id,
+                    "epic": s.epic,
+                    "feature": s.feature,
+                    "title": s.title,
+                    "user_story": s.user_story,
+                    "acceptance_criteria": s.acceptance_criteria,
+                    "trace_mappings": s.trace_mappings
+                }
+                for s in stories
+            ]
+
+            # Generate Final Story Zest
+            from backend.orchestrator.story_zest import StoryZestGenerator
+            zest_gen = StoryZestGenerator()
+            final_zest = await zest_gen.generate_zest(stories_list, is_final=True)
+
+            # Save Final Story Zest
+            await session.execute(delete(StoryZest).where(
+                (StoryZest.job_id == job_id) & (StoryZest.type == "FINAL")
+            ))
+            zest_model = StoryZest(
+                job_id=job_id,
+                type="FINAL",
+                business_goal=final_zest.get("business_goal", ""),
+                scope_summary=final_zest.get("scope_summary", ""),
+                actors=final_zest.get("actors", []),
+                key_features=final_zest.get("key_features", []),
+                dependencies=final_zest.get("dependencies", []),
+                risks=final_zest.get("risks", []),
+                coverage_metrics=final_zest.get("coverage_metrics", {}),
+                version_number=version_number,
+                execution_id=execution_id,
+                pipeline_run_id=pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(zest_model)
+
+            # Save ValidatedStoryPackageDB
+            await session.execute(delete(ValidatedStoryPackageDB).where(ValidatedStoryPackageDB.job_id == job_id))
+            db_package = ValidatedStoryPackageDB(
+                package_id=str(uuid.uuid4()),
+                job_id=job_id,
+                stories=stories_list,
+                traceability_links=[s.get("trace_mappings", []) for s in stories_list],
+                coverage_metrics=final_zest.get("coverage_metrics", {}),
+                quality_metrics={"approved_stories": len(stories_list)},
+                approval_status="APPROVED",
+                audit_metadata={"approved_by": reviewer, "approved_at": datetime.utcnow().isoformat() + "Z"},
+                final_story_zest=str(final_zest),
+                version_number=version_number,
+                execution_id=execution_id,
+                pipeline_run_id=pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(db_package)
+
+        elif decision == "REWORK":
+            job.status = "RUNNING"
+        else:
+            job.status = "MANUAL_RESOLUTION_REQUIRED"
+            
         await session.commit()
 
     # Log audit event
@@ -465,7 +543,7 @@ async def submit_ba_review(
         background_tasks.add_task(run_rework_pipeline, job_id, edits, comments)
         return {"status": "success", "next_state": "REWORK", "message": "Rework pipeline started in background."}
 
-    return {"status": "success", "next_state": "PUBLISHED" if decision == "APPROVE" else "REWORK" if decision == "REWORK" else "FAILED"}
+    return {"status": "success", "next_state": "PUBLISHED" if decision == "APPROVE" else "REWORK" if decision == "REWORK" else "MANUAL_RESOLUTION_REQUIRED"}
 
 
 @router.get("/jobs/{job_id}/report", response_model=Dict[str, Any])
@@ -477,7 +555,6 @@ async def get_validation_report(
     Retrieves the latest validation result and findings for a job.
     """
     async with AsyncSessionLocal() as session:
-        # Get latest validation result
         stmt = select(ValidationResultDB).where(ValidationResultDB.job_id == job_id).order_by(ValidationResultDB.created_at.desc())
         res = await session.execute(stmt)
         result = res.scalars().first()
@@ -485,7 +562,6 @@ async def get_validation_report(
         if not result:
             raise HTTPException(status_code=404, detail="No validation report found for this job ID.")
             
-        # Get findings
         stmt_f = select(ValidationFindingDB).where(ValidationFindingDB.validation_result_id == result.id)
         res_f = await session.execute(stmt_f)
         findings = res_f.scalars().all()
@@ -509,6 +585,339 @@ async def get_validation_report(
             } for f in findings]
         }
 
+
+@router.get("/jobs/{job_id}/history", response_model=Dict[str, Any])
+async def get_job_history(
+    job_id: str,
+    user_info: Dict[str, Any] = Depends(SecurityService.authenticate)
+):
+    """
+    Lists all version history, rework cycles, and decisions for a job.
+    """
+    async with AsyncSessionLocal() as session:
+        # Fetch all validation results ordered by version
+        stmt_val = select(ValidationResultDB).where(ValidationResultDB.job_id == job_id).order_by(ValidationResultDB.version_number.asc())
+        res_val = await session.execute(stmt_val)
+        val_results = res_val.scalars().all()
+
+        # Fetch all BA reviews
+        stmt_rev = select(BAReviewDB).where(BAReviewDB.job_id == job_id).order_by(BAReviewDB.version_number.asc())
+        res_rev = await session.execute(stmt_rev)
+        reviews = res_rev.scalars().all()
+
+        versions = []
+        for val in val_results:
+            # Find matching review for this version
+            review = next((r for r in reviews if r.version_number == val.version_number), None)
+            
+            versions.append({
+                "version_number": val.version_number,
+                "created_at": val.created_at.isoformat() + "Z",
+                "quality_score": val.quality_score,
+                "coverage_score": val.coverage_score,
+                "traceability_score": val.traceability_score,
+                "validation_decision": val.decision,
+                "ba_decision": review.decision if review else None,
+                "ba_reviewer": review.reviewer if review else None,
+                "ba_comments": review.comments if review else None,
+                "retry_count": val.retry_count
+            })
+
+        return {
+            "job_id": job_id,
+            "versions": versions
+        }
+
+
+@router.get("/jobs/{job_id}/version/{version_number}", response_model=Dict[str, Any])
+async def get_job_version(
+    job_id: str,
+    version_number: int,
+    user_info: Dict[str, Any] = Depends(SecurityService.authenticate)
+):
+    """
+    Retrieves all requirements, stories, and validation results for a specific version.
+    """
+    from backend.db.models import Requirement, Story, StoryZest
+    async with AsyncSessionLocal() as session:
+        # Fetch requirements for this version
+        stmt_reqs = select(Requirement).where(
+            (Requirement.job_id == job_id) & (Requirement.version_number == version_number)
+        )
+        res_reqs = await session.execute(stmt_reqs)
+        reqs = res_reqs.scalars().all()
+
+        # Fetch stories
+        stmt_stories = select(Story).where(
+            (Story.job_id == job_id) & (Story.version_number == version_number)
+        )
+        res_stories = await session.execute(stmt_stories)
+        stories = res_stories.scalars().all()
+
+        # Fetch validation result
+        stmt_val = select(ValidationResultDB).where(
+            (ValidationResultDB.job_id == job_id) & (ValidationResultDB.version_number == version_number)
+        )
+        res_val = await session.execute(stmt_val)
+        val = res_val.scalars().first()
+
+        findings = []
+        if val:
+            stmt_f = select(ValidationFindingDB).where(ValidationFindingDB.validation_result_id == val.id)
+            res_f = await session.execute(stmt_f)
+            findings = res_f.scalars().all()
+
+        # Fetch story zest
+        stmt_zest = select(StoryZest).where(
+            (StoryZest.job_id == job_id) & (StoryZest.version_number == version_number)
+        )
+        res_zest = await session.execute(stmt_zest)
+        zests = res_zest.scalars().all()
+        draft_zest = next((z for z in zests if z.type == "DRAFT"), None)
+        final_zest = next((z if z.type == "FINAL" else None for z in zests), None)
+
+        return {
+            "job_id": job_id,
+            "version_number": version_number,
+            "requirements": [
+                {
+                    "id": r.id,
+                    "content": r.content,
+                    "actors": r.actors,
+                    "business_rules": r.business_rules,
+                    "confidence_score": r.confidence_score,
+                    "trace_id": r.trace_id
+                }
+                for r in reqs
+            ],
+            "stories": [
+                {
+                    "id": s.id,
+                    "epic": s.epic,
+                    "feature": s.feature,
+                    "title": s.title,
+                    "user_story": s.user_story,
+                    "acceptance_criteria": s.acceptance_criteria,
+                    "trace_mappings": s.trace_mappings
+                }
+                for s in stories
+            ],
+            "validation": {
+                "quality_score": val.quality_score if val else None,
+                "coverage_score": val.coverage_score if val else None,
+                "traceability_score": val.traceability_score if val else None,
+                "decision": val.decision if val else None,
+                "findings": [
+                    {
+                        "id": f.id,
+                        "validator_name": f.validator_name,
+                        "title": f.title,
+                        "description": f.description,
+                        "severity": f.severity
+                    }
+                    for f in findings
+                ]
+            } if val else None,
+            "draft_story_zest": {
+                "business_goal": draft_zest.business_goal,
+                "scope_summary": draft_zest.scope_summary,
+                "actors": draft_zest.actors,
+                "key_features": draft_zest.key_features,
+                "dependencies": draft_zest.dependencies,
+                "risks": draft_zest.risks,
+                "coverage_metrics": draft_zest.coverage_metrics
+            } if draft_zest else None,
+            "final_story_zest": {
+                "business_goal": final_zest.business_goal,
+                "scope_summary": final_zest.scope_summary,
+                "actors": final_zest.actors,
+                "key_features": final_zest.key_features,
+                "dependencies": final_zest.dependencies,
+                "risks": final_zest.risks,
+                "coverage_metrics": final_zest.coverage_metrics
+            } if final_zest else None
+        }
+
+
+@router.post("/jobs/{job_id}/restore/{version_number}", response_model=Dict[str, Any])
+async def restore_job_version(
+    job_id: str,
+    version_number: int,
+    user_info: Dict[str, Any] = Depends(SecurityService.authenticate)
+):
+    """
+    Restores a specific historical version as a new active version.
+    """
+    SecurityService.authorize(user_info, ["BA", "ADMIN"])
+
+    from backend.db.models import Job, Requirement, Story, MasterContext, StoryContextPacket, StoryZest, ValidationContextModel
+    from sqlalchemy import update
+    
+    async with AsyncSessionLocal() as session:
+        # Get Job
+        stmt_job = select(Job).where(Job.id == job_id)
+        res_job = await session.execute(stmt_job)
+        job = res_job.scalar_one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        current_active_version = job.version_number
+        new_active_version = current_active_version + 1
+        new_execution_id = str(uuid.uuid4())
+
+        # Fetch historical requirements
+        stmt_reqs = select(Requirement).where(
+            (Requirement.job_id == job_id) & (Requirement.version_number == version_number)
+        )
+        res_reqs = await session.execute(stmt_reqs)
+        historical_reqs = res_reqs.scalars().all()
+
+        # Duplicate requirements for new version
+        for r in historical_reqs:
+            new_r = Requirement(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                content=r.content,
+                actors=r.actors,
+                business_rules=r.business_rules,
+                ambiguities=r.ambiguities,
+                conflicts=r.conflicts,
+                confidence_score=r.confidence_score,
+                trace_id=r.trace_id,
+                version_number=new_active_version,
+                execution_id=new_execution_id,
+                pipeline_run_id=job.pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(new_r)
+
+        # Fetch and duplicate stories
+        stmt_stories = select(Story).where(
+            (Story.job_id == job_id) & (Story.version_number == version_number)
+        )
+        res_stories = await session.execute(stmt_stories)
+        historical_stories = res_stories.scalars().all()
+
+        for s in historical_stories:
+            new_s = Story(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                epic=s.epic,
+                feature=s.feature,
+                title=s.title,
+                user_story=s.user_story,
+                acceptance_criteria=s.acceptance_criteria,
+                trace_mappings=s.trace_mappings,
+                validation_results=s.validation_results,
+                plain_text_summary=s.plain_text_summary,
+                version_number=new_active_version,
+                execution_id=new_execution_id,
+                pipeline_run_id=job.pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(new_s)
+
+        # Fetch and duplicate master contexts
+        stmt_mc = select(MasterContext).where(
+            (MasterContext.job_id == job_id) & (MasterContext.version_number == version_number)
+        )
+        res_mc = await session.execute(stmt_mc)
+        historical_mcs = res_mc.scalars().all()
+        for mc in historical_mcs:
+            new_mc = MasterContext(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                requirements=mc.requirements,
+                actors=mc.actors,
+                business_rules=mc.business_rules,
+                validation_context=mc.validation_context,
+                epics=mc.epics,
+                features=mc.features,
+                hierarchy=mc.hierarchy,
+                priority=mc.priority,
+                coverage_report=mc.coverage_report,
+                dependencies=mc.dependencies,
+                orchestrator_metadata=mc.orchestrator_metadata,
+                traceability_matrix=mc.traceability_matrix,
+                version_number=new_active_version,
+                execution_id=new_execution_id,
+                pipeline_run_id=job.pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(new_mc)
+
+        # Fetch and duplicate story context packets
+        stmt_scp = select(StoryContextPacket).where(
+            (StoryContextPacket.job_id == job_id) & (StoryContextPacket.version_number == version_number)
+        )
+        res_scp = await session.execute(stmt_scp)
+        historical_scps = res_scp.scalars().all()
+        for scp in historical_scps:
+            new_scp = StoryContextPacket(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                story_id=scp.story_id,
+                requirement_id=scp.requirement_id,
+                requirement=scp.requirement,
+                epic=scp.epic,
+                feature=scp.feature,
+                actor=scp.actor,
+                business_rules=scp.business_rules,
+                dependencies=scp.dependencies,
+                priority=scp.priority,
+                validation=scp.validation,
+                traceability=scp.traceability,
+                version_number=new_active_version,
+                execution_id=new_execution_id,
+                pipeline_run_id=job.pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(new_scp)
+
+        # Fetch and duplicate zests
+        stmt_z = select(StoryZest).where(
+            (StoryZest.job_id == job_id) & (StoryZest.version_number == version_number)
+        )
+        res_z = await session.execute(stmt_z)
+        historical_zs = res_z.scalars().all()
+        for z in historical_zs:
+            new_z = StoryZest(
+                id=str(uuid.uuid4()),
+                job_id=job_id,
+                type=z.type,
+                business_goal=z.business_goal,
+                scope_summary=z.scope_summary,
+                actors=z.actors,
+                key_features=z.key_features,
+                dependencies=z.dependencies,
+                risks=z.risks,
+                coverage_metrics=z.coverage_metrics,
+                version_number=new_active_version,
+                execution_id=new_execution_id,
+                pipeline_run_id=job.pipeline_run_id,
+                status="COMPLETED"
+            )
+            session.add(new_z)
+
+        # Update Job
+        job.version_number = new_active_version
+        job.execution_id = new_execution_id
+        job.status = "HUMAN_REVIEW"
+        await session.commit()
+
+    await AuditService.log_event(
+        job_id, 
+        "VERSION_RESTORED", 
+        {"from_version": version_number, "to_version": new_active_version}
+    )
+
+    return {
+        "status": "success",
+        "message": f"Version {version_number} restored successfully as Version {new_active_version}.",
+        "active_version": new_active_version
+    }
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     """
@@ -521,3 +930,4 @@ async def get_dashboard():
     with open(dashboard_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return html_content
+

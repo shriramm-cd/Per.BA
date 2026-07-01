@@ -1,0 +1,5 @@
+Functional Requirement: Leave Application Flow
+- Employees must be able to apply for leave.
+- The request must specify Start Date, End Date, and Leave Type (Sick, Casual, Annual).
+- Managers must be notified of new requests and can Approve or Reject.
+- System must update leave balances and enforce a maximum of 30 accrued dRequirement: The system should allow user registration and verification.ays.

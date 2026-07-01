@@ -25,7 +25,8 @@ def route_after_agent1(state: GraphState) -> str:
 
 def route_after_validation(state: GraphState) -> str:
     """
-    Determines if validation results are sufficient to export, or if human review is needed.
+    Determines if validation results are sufficient to export, or if human review is needed,
+    or if we should trigger the automatic rework loop.
     """
     is_approved = state.get("is_approved", False)
     human_approved = state.get("human_approved", False)
@@ -34,7 +35,27 @@ def route_after_validation(state: GraphState) -> str:
         logger.info("Routing logic: Approved. Directing to Export.")
         return "export_node"
     
-    logger.info("Routing logic: Quality threshold not met. Directing to Human Review.")
+    validation_results = state.get("validation_results", {})
+    decision = None
+    if isinstance(validation_results, dict):
+        summary = validation_results.get("summary")
+        if isinstance(summary, dict):
+            decision = summary.get("decision")
+        if not decision:
+            decision = validation_results.get("decision")
+            
+    retry_count = state.get("retry_count", 0)
+    max_retries = state.get("max_retries", 3)
+
+    if decision == "REWORK":
+        if retry_count < max_retries:
+            logger.info(f"Routing logic: Validation failed (REWORK). Attempt {retry_count + 1} of {max_retries}. Directing to automatic rework loop.")
+            return "automatic_revision_node"
+        else:
+            logger.warning(f"Routing logic: Retry limit ({max_retries}) exceeded. Directing to Human Review.")
+            return "human_review_node"
+    
+    logger.info("Routing logic: Directing to Human Review.")
     return "human_review_node"
 
 # INTEGRATION NOTE

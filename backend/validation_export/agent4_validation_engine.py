@@ -131,6 +131,11 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
     quality_score = max(0.0, 100.0 - penalty)
 
     # 8. Persist Results to Database
+    version_number = input_data.get("version_number", 1)
+    execution_id = input_data.get("execution_id")
+    pipeline_run_id = input_data.get("pipeline_run_id")
+    status_val = "COMPLETED"
+
     async with AsyncSessionLocal() as session:
         try:
             db_result = ValidationResultDB(
@@ -140,7 +145,17 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
                 coverage_score=round(coverage_pct, 2),
                 traceability_score=round(100.0 - (len([f for f in findings if "TRACE-" in f.id]) * 15), 2),
                 decision=decision.value,
-                retry_count=retry_count
+                retry_count=retry_count,
+                validators_passed=len(validators_passed),
+                validators_failed=len(validators_failed),
+                critical_count=critical_count,
+                major_count=major_count,
+                minor_count=minor_count,
+                info_count=info_count,
+                version_number=version_number,
+                execution_id=execution_id,
+                pipeline_run_id=pipeline_run_id,
+                status=status_val
             )
             session.add(db_result)
             
@@ -153,7 +168,11 @@ async def run(input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = Non
                     description=f.description,
                     severity=f.severity.value,
                     field=f.field,
-                    mitigation=f.mitigation
+                    mitigation=f.mitigation,
+                    version_number=version_number,
+                    execution_id=execution_id,
+                    pipeline_run_id=pipeline_run_id,
+                    status=status_val
                 )
                 session.add(db_finding)
                 

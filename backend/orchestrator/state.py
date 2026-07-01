@@ -47,6 +47,11 @@ class PipelineState(BaseModel):
     max_retries: int = 3
     status: str = Field(default="PENDING")  # PENDING, RUNNING, COMPLETED, FAILED
     error_message: Optional[str] = None
+    
+    # Audit and versioning
+    version_number: int = 1
+    execution_id: Optional[str] = None
+    pipeline_run_id: Optional[str] = None
 
 
 class GraphState(TypedDict):
@@ -105,6 +110,12 @@ class GraphState(TypedDict):
     error_message: Optional[str]
     human_approved: bool
     approval_status: Optional[str]
+    
+    # Audit and versioning
+    version_number: int
+    execution_id: str
+    pipeline_run_id: str
+
 
 
 # INTEGRATION NOTE

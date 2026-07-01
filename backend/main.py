@@ -21,7 +21,7 @@ from backend.validation_export.db_models import (
 )
 
 # Import API routes
-from backend.api.routes import ingest, pipeline, stories, audit
+from backend.api.routes import ingest, pipeline, stories, audit, connectors
 from backend.validation_export.api import router as validation_router
 from backend.api.middleware import RequestLoggingMiddleware
 from backend.shared.logger import get_logger
@@ -52,6 +52,7 @@ app.include_router(pipeline.router)
 app.include_router(stories.router)
 app.include_router(audit.router)
 app.include_router(validation_router)
+app.include_router(connectors.router)
 
 @app.on_event("startup")
 async def on_startup():

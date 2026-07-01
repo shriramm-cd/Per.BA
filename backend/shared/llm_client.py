@@ -21,7 +21,7 @@ class LLMClient:
         
         if self.gemini_key:
             genai.configure(api_key=self.gemini_key)
-            self.gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+            self.gemini_model = genai.GenerativeModel("gemini-3.5-flash")
         else:
             self.gemini_model = None
 
@@ -53,61 +53,81 @@ class LLMClient:
             return content.strip()
 
         # Try Groq with automatic model fallback
+        import asyncio
         groq_error = None
         if self.groq_client:
-            models_to_try = [groq_model] + ["llama-3.3-70b-specdec", "llama3-70b-8192", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
+            models_to_try = [groq_model] + ["llama-3.1-8b-instant", "llama-3.2-3b-preview"]
             for model in models_to_try:
-                try:
-                    logger.info(f"Submitting LLM request to Groq model: {model}")
-                    response = await self.groq_client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                        temperature=0.2,
-                        timeout=120.0
-                    )
-                    raw_content = response.choices[0].message.content
-                    logger.info(f"Raw Groq Response ({model}):\n{raw_content}")
-                    
-                    cleaned = clean_json_content(raw_content)
-                    return json.loads(cleaned)
-                except json.JSONDecodeError as je:
-                    logger.error(f"Groq JSON parsing failed for model {model}. Error: {str(je)}\nRaw response content:\n{raw_content}")
-                    groq_error = je
-                except Exception as e:
-                    logger.warning(f"Groq invocation failed for model {model}: {str(e)}. Trying next model...")
-                    groq_error = e
+                for attempt in range(3):
+                    try:
+                        logger.info(f"Submitting LLM request to Groq model: {model} (attempt {attempt+1}/3)")
+                        response = await self.groq_client.chat.completions.create(
+                            model=model,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                            temperature=0.2,
+                            timeout=120.0
+                        )
+                        raw_content = response.choices[0].message.content
+                        logger.info(f"Raw Groq Response ({model}):\n{raw_content}")
+                        
+                        cleaned = clean_json_content(raw_content)
+                        return json.loads(cleaned)
+                    except json.JSONDecodeError as je:
+                        logger.error(f"Groq JSON parsing failed for model {model}. Error: {str(je)}\nRaw response content:\n{raw_content}")
+                        groq_error = je
+                        break  # Parsing failure means model returned text, no need to retry rate limits
+                    except Exception as e:
+                        groq_error = e
+                        error_msg = str(e).lower()
+                        if "429" in error_msg or "rate limit" in error_msg or "tpm" in error_msg or "limit exceeded" in error_msg:
+                            logger.warning(f"Groq rate limit hit for model {model}. Sleeping for 5s before retry... Error: {str(e)}")
+                            await asyncio.sleep(5.0)
+                            continue
+                        else:
+                            logger.warning(f"Groq invocation failed for model {model}: {str(e)}. Trying next model...")
+                            break
             logger.warning("All Groq models failed. Falling back to Gemini.")
         else:
             logger.info("Groq client not available. Bypassing to Gemini.")
 
 
         # Fallback to Gemini
-        if self.gemini_model:
-            try:
-                logger.info("Submitting LLM request to Gemini model: gemini-1.5-flash")
-                full_prompt = prompt
-                if system_prompt:
-                    full_prompt = f"System Context:\n{system_prompt}\n\nUser Request:\n{prompt}"
-                
-                response = await self.gemini_model.generate_content_async(
-                    contents=full_prompt,
-                    generation_config=GenerationConfig(
-                        response_mime_type="application/json",
-                        temperature=0.2
+        if self.gemini_key:
+            gemini_models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+            gemini_error = None
+            for g_model in gemini_models:
+                try:
+                    logger.info(f"Submitting LLM request to Gemini model: {g_model}")
+                    model_instance = genai.GenerativeModel(g_model)
+                    full_prompt = prompt
+                    if system_prompt:
+                        full_prompt = f"System Context:\n{system_prompt}\n\nUser Request:\n{prompt}"
+                    
+                    response = await model_instance.generate_content_async(
+                        contents=full_prompt,
+                        generation_config=GenerationConfig(
+                            response_mime_type="application/json",
+                            temperature=0.2
+                        )
                     )
-                )
-                raw_text = response.text
-                logger.info(f"Raw Gemini Response:\n{raw_text}")
-                
-                cleaned = clean_json_content(raw_text)
-                return json.loads(cleaned)
-            except json.JSONDecodeError as je:
-                logger.error(f"Gemini JSON parsing failed. Error: {str(je)}\nRaw response text:\n{raw_text}")
-                raise RuntimeError(f"Gemini returned invalid JSON: {str(je)}. Raw response:\n{raw_text}") from je
-            except Exception as e:
-                logger.error(f"Gemini fallback failure: {str(e)}")
-                raise RuntimeError(f"All LLM clients failed to return valid JSON. Groq error: {str(groq_error)}. Gemini error: {str(e)}") from e
+                    raw_text = response.text
+                    logger.info(f"Raw Gemini Response ({g_model}):\n{raw_text}")
+                    
+                    cleaned = clean_json_content(raw_text)
+                    return json.loads(cleaned)
+                except json.JSONDecodeError as je:
+                    logger.error(f"Gemini JSON parsing failed for model {g_model}. Error: {str(je)}\nRaw response text:\n{raw_text}")
+                    gemini_error = je
+                    break
+                except Exception as e:
+                    logger.warning(f"Gemini invocation failed for model {g_model}: {str(e)}")
+                    gemini_error = e
+
+            if gemini_error:
+                raise RuntimeError(f"All LLM clients failed to return valid JSON. Groq error: {str(groq_error)}. Gemini error: {str(gemini_error)}")
+            else:
+                raise RuntimeError(f"All Groq models failed and no Gemini fallback succeeded. Groq error: {str(groq_error)}")
         else:
             if groq_error:
                 raise RuntimeError(f"Groq execution failed and no Gemini fallback is configured: {str(groq_error)}") from groq_error

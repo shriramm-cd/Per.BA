@@ -19,6 +19,9 @@ from backend.ingestion.connectors.sharepoint_connector import SharePointConnecto
 from backend.ingestion.connectors.gdrive_connector import GDriveConnector
 
 from backend.shared.logger import get_logger
+from backend.agents.domain_detection import DomainDetectionModule
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/ingest", tags=["Ingestion"])
@@ -60,24 +63,43 @@ async def ingest_requirements(
 
             
         elif source_type == "JIRA":
-            conn = JiraConnector()
-            await conn.connect(config_override)
-            raw_text = await conn.fetch(target)
+            conn = JiraConnector(
+                server_url=config_override.get("jira_server_url"),
+                username=config_override.get("jira_username"),
+                api_token=config_override.get("jira_api_token")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
             
         elif source_type == "CONFLUENCE":
-            conn = ConfluenceConnector()
-            await conn.connect(config_override)
-            raw_text = await conn.fetch(target)
+            conn = ConfluenceConnector(
+                server_url=config_override.get("confluence_server_url"),
+                username=config_override.get("confluence_username"),
+                api_token=config_override.get("confluence_api_token")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
             
         elif source_type == "SHAREPOINT":
-            conn = SharePointConnector()
-            await conn.connect(config_override)
-            raw_text = await conn.fetch(target)
+            conn = SharePointConnector(
+                tenant_id=config_override.get("sharepoint_tenant_id"),
+                client_id=config_override.get("sharepoint_client_id"),
+                client_secret=config_override.get("sharepoint_client_secret"),
+                site_id=config_override.get("sharepoint_site_id")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
             
         elif source_type == "GDRIVE":
-            conn = GDriveConnector()
-            await conn.connect(config_override)
-            raw_text = await conn.fetch(target)
+            conn = GDriveConnector(
+                credentials_json=config_override.get("gdrive_credentials_json")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
             
         else:
             raise HTTPException(
@@ -317,4 +339,115 @@ async def upload_brd(
             )
             
     return {"uploaded_files": results}
+
+
+class IngestPreviewRequest(BaseModel):
+    source_type: str  # FILE, JIRA, CONFLUENCE, SHAREPOINT, GDRIVE
+    target_identifier: str
+    connection_config: Optional[Dict[str, Any]] = None
+
+
+@router.post("/preview")
+async def preview_ingest(
+    payload: IngestPreviewRequest,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Retrieves and normalizes requirements from a source, running domain detection for an intake preview.
+    """
+    source_type = payload.source_type.upper()
+    target = payload.target_identifier
+    config_override = payload.connection_config or {}
+
+    logger.info(f"Previewing Ingestion for Source: {source_type}, Target: {target}")
+    raw_text = ""
+
+    try:
+        if source_type == "FILE":
+            file_res = await load_from_file(target)
+            raw_text = file_res.get("text", "") if isinstance(file_res, dict) else file_res
+        elif source_type == "JIRA":
+            conn = JiraConnector(
+                server_url=config_override.get("jira_server_url"),
+                username=config_override.get("jira_username"),
+                api_token=config_override.get("jira_api_token")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
+        elif source_type == "CONFLUENCE":
+            conn = ConfluenceConnector(
+                server_url=config_override.get("confluence_server_url"),
+                username=config_override.get("confluence_username"),
+                api_token=config_override.get("confluence_api_token")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
+        elif source_type == "SHAREPOINT":
+            conn = SharePointConnector(
+                tenant_id=config_override.get("sharepoint_tenant_id"),
+                client_id=config_override.get("sharepoint_client_id"),
+                client_secret=config_override.get("sharepoint_client_secret"),
+                site_id=config_override.get("sharepoint_site_id")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
+        elif source_type == "GDRIVE":
+            conn = GDriveConnector(
+                credentials_json=config_override.get("gdrive_credentials_json")
+            )
+            conn.authenticate()
+            res = await conn.fetch(target)
+            raw_text = res.get("text", "")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported source type '{source_type}'."
+            )
+
+        # Text clean-up and normalization
+        cleaned_text = TextNormalizer.clean(raw_text)
+        lang = TextNormalizer.detect_language(cleaned_text)
+        fingerprint_hash = Fingerprint.calculate(cleaned_text)
+
+        # Domain Detection
+        domain_detector = DomainDetectionModule()
+        try:
+            domain_res = await domain_detector.detect_domain(cleaned_text)
+            domain_info = {
+                "primary_domain": domain_res.primary_domain,
+                "secondary_domains": domain_res.secondary_domains,
+                "confidence": domain_res.confidence,
+                "reasoning": domain_res.reasoning
+            }
+        except Exception as e:
+            logger.error(f"Domain detection failed during preview: {str(e)}")
+            domain_info = {
+                "primary_domain": "Unknown",
+                "secondary_domains": [],
+                "confidence": 0,
+                "reasoning": f"Detection failed: {str(e)}"
+            }
+
+        return {
+            "source_type": source_type,
+            "file_name": os.path.basename(target) if source_type == "FILE" else target,
+            "file_type": "text/plain" if source_type == "FILE" else "connector/text",
+            "domain": domain_info,
+            "language": lang,
+            "extracted_text_preview": cleaned_text[:1000] + ("..." if len(cleaned_text) > 1000 else ""),
+            "requirement_package_preview": {
+                "raw_text": cleaned_text,
+                "fingerprint": fingerprint_hash
+            }
+        }
+    except Exception as e:
+        logger.error(f"Preview failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Preview failed: {str(e)}"
+        )
+
 

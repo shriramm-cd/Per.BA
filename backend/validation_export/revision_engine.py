@@ -25,7 +25,11 @@ class RevisionEngine:
         stories: List[Dict[str, Any]],
         findings: List[ValidationFinding],
         retry_count: int,
-        ba_comments: Optional[str] = None
+        ba_comments: Optional[str] = None,
+        version_number: int = 1,
+        execution_id: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
+        status: Optional[str] = None
     ) -> RevisionPackage:
         """
         Analyzes findings and generates a structured RevisionPackage.
@@ -56,7 +60,7 @@ class RevisionEngine:
             title=title,
             actor=actor,
             traceability_links=list(set(traceability_links)),
-            approved_sections=[s.get("title") for s in stories if s.get("id") not in [f.field for f in findings]],
+            approved_results=[s.get("title") for s in stories if s.get("id") not in [f.field for f in findings]],
             approved_business_rules=approved_brs
         )
 
@@ -105,7 +109,11 @@ class RevisionEngine:
                     validation_report=package.validation_report,
                     ba_comments=package.ba_comments,
                     preserve_section=package.preserve_section.model_dump(),
-                    modify_section=package.modify_section.model_dump()
+                    modify_section=package.modify_section.model_dump(),
+                    version_number=version_number,
+                    execution_id=execution_id,
+                    pipeline_run_id=pipeline_run_id,
+                    status=status
                 )
                 session.add(db_package)
                 await session.commit()
